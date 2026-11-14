@@ -1,0 +1,19 @@
+{
+  "name": "workrelay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Autonomous contractor orchestration for the NEAR Agent Economy",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "discover": "node scripts/discover-agents.mjs",
+    "test": "node --test",
+    "rank": "node scripts/rank-agents.mjs",
+    "plan": "node scripts/plan-project.mjs",
+    "quote": "node scripts/quote-project.mjs",
+    "probe": "node scripts/probe-provider.mjs",
+    "start": "node src/app-server.js"
+  }
+}
