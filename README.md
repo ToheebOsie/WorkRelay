@@ -1,118 +1,214 @@
 # WorkRelay
 
-**An evidence-backed research procurement workflow.** WorkRelay structures a narrow buyer decision into work packages, compares unpaid provider quotes, coordinates accepted handoffs and presents claim/source evidence that reviewers can inspect. Its NEAR testnet escrow is a separate optional proof, not payment to an Agent Market provider.
+**An evidence-backed research procurement workflow for the NEAR Agent Economy: it turns one narrow buyer decision into scoped work packages, compares unpaid provider quotes, hands accepted work downstream only with hash-bound human approval, and shows the claim and source evidence a reviewer can inspect. A separate NEAR testnet escrow is an optional settlement proof, not payment to an Agent Market provider.**
 
-## Current status
+<p align="center">
+  <img src="assets/banner.svg" alt="WorkRelay: evidence-backed research procurement, with every handoff hash-bound and human-approved." width="100%">
+</p>
 
-WorkRelay is a hackathon MVP with three deliberately distinct capabilities:
+**Docs: [guides](#-docs-)** · **Escrow spec: [NEAR_TESTNET_ESCROW_SPEC.md](docs/NEAR_TESTNET_ESCROW_SPEC.md)** · **Testnet runbook: [NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md](docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md)**
 
-- **Simulation:** a no-wallet demo with sample providers, illustrative prices and simulated deliverables. Outputs are not live research or real provider work.
-- **Live discovery and quote inspection:** public Agent Market discovery and unpaid A2A quote requests. A quote is not an approval, commission or payment.
-- **NEAR testnet proof:** a separate JobEscrow contract and WorkRelay Test Token (`WRT`, six decimals) are implemented. The operator reports that Rust host gates, Clippy and both WASM builds pass on Rust 1.97.0. The six local NEAR Sandbox integration tests have not executed because the Sandbox binary download was blocked. No wallet UI or testnet deployment exists. This proof will not pay an Agent Market provider.
-- **Live Agent Market payment:** out of scope and disabled. No wallet signer is bundled. The current app-server accepts EVM buyer networks (Base, Polygon and Arbitrum), while the current Agent Market A2A hiring guide documents a NEAR-mainnet delegated-transfer profile. These flows have not been reconciled. The exact historical shared recipient remains unverified, and the dispatch route needs an atomic duplicate-dispatch guard before live spending.
+![](assets/divider.svg)
 
-The accepted Step 7 Increment 5 evidence baseline had 220 passing tests on Windows. The current source includes four separate NEAR terms tests plus Node regression guards for transaction-result handling, non-mutating formatting and revision-deadline dispute handling; the current Node suite passes 228/228 in this Linux environment. The operator reports both WASM builds passed, but Node tests and host/WASM compilation do not establish on-chain state-machine behavior; the NEAR Sandbox integration gate remains outstanding. See [payment safety](docs/X402_PAYMENT_AUTHORIZATION.md).
+## ⭐ Overview ⭐
 
-**Step 6 browser QA is accepted and closed.** The operator reports that the full simulation journey, four scenario branches, reset/replay, visual contrast, keyboard controls, report export, browser diagnostics, 390px layout and native Windows regression run passed. Live marketplace availability itself was not verified because the marketplace host was unreachable in the test environment. See [the Step 6 browser QA report](docs/BROWSER_QA_REPORT.md).
+**The problem.** Buying research from an AI agent marketplace is easy to start and hard to trust. A listing is untrusted input, a quote is not a price you approved, a delivery is not an accepted result, and an accepted result is not a verified claim. Most tools blur these steps. WorkRelay keeps each one separate and shows the evidence behind the final answer.
 
-**Evidence-quality baseline:** Step 7 Increment 5 is frozen as the current hackathon baseline. The research-backed Nigeria fintech candidate publisher pack remains inactive. Further publisher-governance expansion is deferred so the hackathon effort can focus on the separate testnet escrow proof. See [the evidence quality policy](docs/EVIDENCE_QUALITY_POLICY.md) and [the hackathon scope reset](docs/HACKATHON_SCOPE_RESET.md).
+**What this is.** A single Node.js app with no runtime dependencies. It plans a decision into work packages with budget ceilings, requests unpaid A2A quotes from NEAR Agent Market providers, and compares them against package and project limits. Each stage needs an explicit human step before the next one starts. Results are presented as material claims with supporting and contradicting sources, dates, calculations and provenance.
 
-## NEAR contract source draft (not yet accepted)
+**The idea.** Every transition is a separate decision, and no stage implies the next:
 
-The repository now contains:
+> Quote retrieval is not approval. Approval is not commissioning. Commissioning is not delivery. Delivery is not acceptance. Acceptance is not payment settlement.
 
-- `contracts/job-escrow` — one buyer, one assigned NEAR account provider, one named resolver, one exact allowlisted WRT contract and immutable job terms.
-- `contracts/workrelay-test-token` — WorkRelay-controlled NEP-141/NEP-145/NEP-148 token, WRT, fixed at six decimals and labelled no monetary value.
-- `contracts/integration-tests` — NEAR Sandbox integration tests that deploy the compiled WASM and exercise roles, deposits, state transitions, claims, failed withdrawals, and accounting.
+A dependent package receives upstream content only after the upstream package has a matching content hash, passed structural evaluation and received explicit human acceptance, and the downstream request is quoted again.
 
-The operator reports that host compilation, Clippy and both WASM builds pass on Rust 1.97.0. The NEAR Sandbox integration suite has not run because the Sandbox binary download was blocked. This ChatGPT environment lacks Rust/Cargo and NEAR Sandbox tooling, so it cannot independently rerun those gates. The current ZIP does not include Cargo.lock; preserve the lockfile generated by the passing Rust environment. Testnet deployment still requires all six Sandbox integration tests to pass. See the [testnet deployment runbook](docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md) and the [contract workspace guide](contracts/README.md).
+![](assets/divider.svg)
 
-On Windows, run the Rust/NEAR build inside WSL2 Ubuntu, not Git Bash. Run the commands from the repository root. If rustup cannot download the pinned `1.97.0` channel but your installed `stable` reports `rustc 1.97.0`, set `export RUSTUP_TOOLCHAIN=stable` for the session; otherwise use the pinned toolchain:
+## 🧭 What works today 🧭
 
-```bash
-npm test
-npm run validate:publisher-candidates
-npm run format:near-contracts    # run once to format Rust sources
-npm run check:near-host          # read-only format + Clippy + unit gate
-npm run test:near-contracts      # WASM + integration Clippy + NEAR Sandbox
+WorkRelay is a hackathon MVP with four deliberately distinct capabilities. The table says plainly what each one is and is not.
+
+| Capability | Status | What it is **not** |
+| --- | --- | --- |
+| **Simulation** | ✅ Working. No wallet, account, chain call or real funds. Four scenario branches. | Not live research and not real provider work. Every provider, price and deliverable is labelled `SIMULATED`. |
+| **Live discovery and quote inspection** | ✅ Working. Public Agent Market discovery and unpaid A2A quote requests. | A quote is not an approval, a commission or a payment. Nothing is signed or spent. |
+| **NEAR testnet escrow proof** | 🟡 Source complete. Format, Clippy (`-D warnings`), unit tests, integration-crate Clippy and WASM build pass on Rust 1.97.0. **The 6 NEAR Sandbox integration tests have not been run yet.** Not deployed yet. | Not audited. Testnet only (rejects mainnet). Uses the WRT test token, which has no monetary value. Not connected to Agent Market commissioning. |
+| **Live Agent Market payment** | ⛔ Out of scope and disabled. No wallet signer is bundled. | The app-server accepts EVM buyer networks (Base, Polygon, Arbitrum) while the current Agent Market hiring guide documents a NEAR-mainnet profile. These flows are unreconciled, so keep payment disabled. See [payment safety](docs/X402_PAYMENT_AUTHORIZATION.md). |
+
+The Node suite passes **228/228** and the inactive publisher-candidate pack validates (9 exact-host candidates, all inactive). Node tests and host or WASM compilation do **not** establish on-chain state-machine behaviour. That needs the Sandbox gate below.
+
+![](assets/divider.svg)
+
+## 🏃 Quick Start for judges 🏃
+
+| 🧪 Simulation · 1 min | ✅ Verify · 2 min | ⛓️ Contracts · WSL2 |
+| --- | --- | --- |
+| `npm start`<br>Open **[http://localhost:4173](http://localhost:4173)** | `npm test`<br>`npm run validate:publisher-candidates` | `npm run format:near-contracts`<br>`npm run check:near-host`<br>`npm run test:near-contracts` |
+| The full no-wallet journey: plan, quote, execute, evaluate, accept, then a freshly quoted downstream package, ending in a downloadable project report | The whole Node suite, then the inactive Nigeria fintech candidate pack is checked. It does not activate or trust any publisher domain | Formats the Rust sources once, runs the read-only format, Clippy and unit gate, then builds WASM and runs the Sandbox tests |
+| Node.js >= 20. Nothing to install: there are no runtime dependencies | Node.js >= 20 | Rust 1.97.0 with the `wasm32-unknown-unknown` target. On Windows, use WSL2 Ubuntu, not Git Bash |
+| You see the `SIMULATED` labels and the four scenario controls | Ends with `# pass 228`, `# fail 0` and `Validated 9 exact-host candidates` | Ends with all 6 Sandbox integration tests passing, then the Node suite again |
+
+The server listens on port `4173`. Set `PORT` to change it.
+
+<details>
+<summary><b>Rust toolchain notes</b></summary>
+
+- `rust-toolchain.toml` pins `1.97.0` and the workspace declares `1.95` as its minimum. The WASM target is not auto-requested, so host gates run without it. Add it for the WASM and Sandbox gates with `rustup target add wasm32-unknown-unknown`.
+- `check:near-host` is **read-only**: `cargo fmt --check`, Clippy with warnings denied and both contract unit-test suites. Run `format:near-contracts` once when you change Rust sources. It also refreshes `SHA256SUMS.txt`.
+- `test:near-contracts` runs the host gate, builds WASM, lints the integration-test crate with `-D warnings`, runs the Sandbox tests single-threaded, then re-runs `npm test` and the candidate validator. It never deploys.
+- If `rustup` cannot download the pin but your installed `stable` is also `1.97.0`, `export RUSTUP_TOOLCHAIN=stable` for the session.
+- Commit `Cargo.lock`. The scripts build with `--locked`.
+
+</details>
+
+![](assets/divider.svg)
+
+## ✨ Features ✨
+
+| Feature | What it does |
+| --- | --- |
+| **Scoped planning** | Splits a buyer decision into draft work packages with budget **ceilings**. A ceiling is not a provider price. |
+| **Unpaid quote comparison** | Reads public Agent Market listings, requests unpaid A2A quotes, and validates each against package and project limits. Listings and quotes are treated as untrusted input. |
+| **Evidence-backed review** | Material claims carry supporting and contradicting sources, dates, calculations, uncertainty and provenance. Publisher authority, freshness, copied-source signals and conflicts feed a packet-bound human review. |
+| **Hash-bound handoff** | Upstream artifacts reach a dependent package only after a matching content hash, structural evaluation and explicit human acceptance. The downstream request is quoted and approved again. |
+| **No-wallet sandbox** | Four judge-visible branches: success with human acceptance, revision request, refund before submission, and an unresolved dispute. Reset and replay are supported. |
+| **Demo credits** | Simulated access limits, not money or a wallet balance. They are abuse friction, not strong identity or rate limiting. |
+| **NEAR testnet escrow** | Hash-committed terms, pull-based claims, private callbacks that restore the exact claim when a transfer fails, permanent job-ID tombstones, and an accounting invariant exposed as a view. |
+| **Guarded deploy tooling** | `deploy-near-testnet.sh` accepts only `.testnet` accounts, hard-codes the testnet network and requires typing `DEPLOY-TESTNET` before signing. |
+
+![](assets/divider.svg)
+
+## 🗺️ How it works 🗺️
+
+```mermaid
+flowchart LR
+  B["Buyer brief"] --> P["Plan<br/>work packages and budget ceilings"]
+  P --> Q["Quote<br/>unpaid A2A quotes vs limits"]
+  Q --> A["Human approval"]
+  A --> E["Execute<br/>simulated provider task"]
+  E --> V["Structural evaluation<br/>and evidence checks"]
+  V --> H["Human acceptance"]
+  H --> D["Downstream handoff<br/>re-quoted and re-approved"]
+  D --> R["Project report<br/>claims, sources, provenance"]
 ```
 
-Before validation, run `npm run format:near-contracts` once to apply rustfmt; retain the formatted source. The host check is non-mutating: it verifies formatting, generates/uses `Cargo.lock`, runs Clippy with warnings denied and runs both Rust contract unit-test suites. The full contract script builds WASM, Clippys the integration-test crate with warnings denied, runs local Sandbox integration tests, and reruns the Node suite and inactive-candidate validator. It does not deploy to testnet. The repository toolchain is Rust 1.97.0; the workspace declares Rust 1.95 as its minimum. The WASM target is deliberately not auto-requested by `rust-toolchain.toml`, so host gates can run without it; install it separately for the WASM/Sandbox gates with `rustup target add wasm32-unknown-unknown --toolchain 1.97.0` (or `--toolchain stable` when using the verified stable override).
+| Path | What it holds |
+| --- | --- |
+| `src/app-server.js`, `public/` | The HTTP server (`/api/plan`, `/api/quote`, `/api/execute`, `/api/evaluate`, `/api/review`, `/api/demo/*`, `/api/health`) and the browser app |
+| `src/contractor/`, `src/market/`, `src/procurement/` | Work-package planning and provider matching, Agent Market discovery and A2A quotes, quote validation and recipient review |
+| `src/orchestration/` | Project lifecycle, simulated execution, structural evaluation, dependency handoff and the provenance report |
+| `src/evidence/` | The evidence pipeline and the evidence-quality policy engine |
+| `src/contracts/`, `src/storage/`, `src/security/`, `src/demo/` | Versioned schemas with canonical serialization, private file-backed stores, principals and the demo-credit ledger |
+| `src/payments/`, `src/near-intents/` | x402 authorization guards (disabled by default) and an isolated NEAR Intents client that is **not** wired up as a signer |
+| `contracts/` | `job-escrow`, `workrelay-test-token` (WRT) and the Sandbox `integration-tests`, plus a shared cross-language test vector |
+| `config/`, `scripts/`, `test/` | The inactive publisher candidate pack, CLI and contract tooling, and the Node test suite |
 
-## Requirements and quick start
+![](assets/divider.svg)
 
-- Node.js 20 or newer
-- No npm runtime dependencies are declared in this build.
+## ⛓️ NEAR testnet escrow ⛓️
 
-```bash
-npm test
-npm run validate:publisher-candidates
-npm start
+A separate Rust workspace holds the optional settlement proof:
+
+- **`contracts/job-escrow`**: one buyer, one assigned NEAR-account provider, one named resolver, one immutable allowlisted token, and immutable hash-committed terms per job.
+- **`contracts/workrelay-test-token`**: WRT, a WorkRelay-controlled NEP-141 / NEP-145 / NEP-148 token fixed at six decimals and labelled as having no monetary value.
+- **`contracts/integration-tests`**: 6 Sandbox tests that deploy the compiled WASM and exercise roles, deposits, state transitions, deadlines, failed withdrawals and accounting.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Created: create_job
+  Created --> Funded: exact WRT ft_transfer_call
+  Funded --> ProviderAccepted: accept_job
+  Funded --> Refundable: decline_job or acceptance deadline
+  ProviderAccepted --> Submitted: submit_artifact
+  ProviderAccepted --> Refundable: delivery deadline
+  Submitted --> Accepted: accept_delivery
+  Submitted --> RevisionRequested: request_revision
+  RevisionRequested --> Submitted: changed resubmission
+  RevisionRequested --> Disputed: delivery deadline
+  Submitted --> Disputed: open_dispute or review deadline
+  Disputed --> Resolved: resolve_dispute
+  Accepted --> [*]: provider withdraws
+  Refundable --> [*]: buyer withdraws
+  Resolved --> [*]: claims withdrawn
 ```
 
-The publisher-candidate validation checks the inactive Nigeria fintech candidate pack. It does not activate or trust any publisher domain.
+Silence never moves money: expired review or revision deadlines enter an unresolved dispute with no default payout or refund. Only the named resolver can allocate a dispute, and the allocation must sum exactly to the escrowed amount. See the [method reference](docs/NEAR_ESCROW_METHODS.md) and the [full specification](docs/NEAR_TESTNET_ESCROW_SPEC.md).
 
-Windows developers: run the same commands in PowerShell. The private persistence stores apply restrictive NTFS ACLs with `icacls.exe` on Windows; POSIX systems use file mode `0600`. See [Windows development and test notes](docs/WINDOWS_DEVELOPMENT.md).
+![](assets/divider.svg)
 
-The server listens on port `4173` by default. Open `http://localhost:4173` for the browser app. Set `PORT` to change the port.
+## 🧰 CLI commands 🧰
 
-## CLI commands
-
-All commands below are read-only with respect to marketplace spending:
+All of these are read-only with respect to marketplace spending. None of them signs, commissions or pays a provider.
 
 ```bash
 npm run discover -- research
 npm run rank -- "market research competitor analysis"
-npm run plan -- 10 "Research the Kenyan fintech market, identify five competitors, analyse their positioning and produce a market-entry report"
+npm run plan  -- 10 "Research the Kenyan fintech market, identify five competitors, analyse their positioning and produce a market-entry report"
 npm run quote -- 10 "Research the Kenyan fintech market, identify five competitors, analyse their positioning and produce a market-entry report"
 npm run probe -- cited-research-desk "Return the price quote only; do not begin paid work."
 ```
 
-`plan` creates draft work packages and budget ceilings. A ceiling is not a provider price. `quote` requests unpaid provider quotes and compares them with package and project limits. `probe` inspects one provider's Agent Card and unpaid A2A response. None of these commands signs, commissions or pays a provider.
+`plan` creates draft work packages and budget ceilings. `quote` requests unpaid provider quotes and compares them with package and project limits. `probe` inspects one provider's Agent Card and unpaid A2A response.
 
-## Product boundaries
+![](assets/divider.svg)
 
-- Provider listings and quotes are untrusted external input.
-- Work-package budgets are ceilings; the actual quote must be evaluated separately.
-- Quote retrieval does not imply user approval.
-- Approval does not imply commissioning.
-- Commissioning does not imply delivery.
-- Delivery does not imply acceptance.
-- Acceptance does not imply payment settlement.
-- Upstream artifacts are supplied to dependent packages only after structural evaluation and explicit human acceptance; the downstream request is newly quoted.
-- Demo credits are simulated access limits, not money or a wallet balance.
+## 🚀 Deploy 🚀
 
-## Deployment
+**Simulation-only demo.** Deploy as a **single Node.js process** with HTTPS, persistent private storage and a strong `DEMO_CREDIT_IP_SECRET`. Do not configure a wallet adapter or live network allowlists. The JSON stores are single-process only: no multiple instances, serverless replicas or horizontally scaled workers.
 
-For a hackathon demonstration, deploy **simulation-only** as a single Node.js process with HTTPS, persistent private storage and a strong `DEMO_CREDIT_IP_SECRET`. Do not configure a wallet adapter or live network allowlists. The JSON stores are single-process only; do not run multiple instances, serverless replicas or horizontally scaled workers against them.
+```bash
+export NODE_ENV=production PORT=4173 TRUST_PROXY=false
+export DEMO_CREDIT_IP_SECRET='<random, 32+ characters, kept stable across restarts>'
+npm start
+```
 
-See [deployment guide](docs/DEPLOYMENT.md) for environment setup, proxy, storage and verification requirements. Public demo-credit limits are abuse friction, not strong identity or rate limiting.
+The app reads `process.env` directly and does **not** load a `.env` file, so set these in your shell or your platform's secret manager. [`.env.example`](.env.example) lists every variable. Leave all `X402_*` variables empty. See the [deployment guide](docs/DEPLOYMENT.md) for proxy, storage and verification requirements.
 
-## Project guides
+**Testnet escrow proof.** Use five separate `.testnet` accounts (buyer, provider, resolver, WRT contract, escrow contract), then follow the [runbook](docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md):
 
-- [Deployment](docs/DEPLOYMENT.md) — safe single-instance demo deployment and preflight.
-- [Demo credits](docs/DEMO_CREDITS.md) — limits, reservation accounting and privacy.
-- [Quote and procurement](docs/QUOTE_AND_PROCUREMENT.md) — discovery, provider matching, quote validation and dependency handoff.
-- [Execution orchestration](docs/EXECUTION_ORCHESTRATION.md) — commissioning state, task tracking, artifact evaluation and acceptance.
-- [Schema contracts](docs/SCHEMA_CONTRACTS.md) — versioned records, canonical serialization and SHA-256 commitments.
-- [Evidence pipeline](docs/EVIDENCE_PIPELINE.md) — safe source capture, committed evidence packets and typed deterministic checks.
-- [Evidence quality policy](docs/EVIDENCE_QUALITY_POLICY.md) — publisher authority policy, freshness, claim provenance, copied/attribution signals, conflict adjudication and packet-bound human review.
-- [Publisher registry owner-review worksheet](docs/PUBLISHER_REGISTRY_OWNER_REVIEW.md) — pending deployment-owner review; no candidates are activated.
-- [Publisher registry research](docs/PUBLISHER_REGISTRY_RESEARCH_NIGERIA_FINTECH.md) — inactive Nigeria fintech exact-host candidates and promotion requirements.
-- [Evidence freshness calibration](docs/EVIDENCE_FRESHNESS_CALIBRATION.md) — cadence rationale, operating tolerances and regulatory currentness semantics.
-- [x402 payment authorization](docs/X402_PAYMENT_AUTHORIZATION.md) — protocol mismatch, signer boundary and live-spending blockers.
-- [Hackathon scope reset](docs/HACKATHON_SCOPE_RESET.md) — the frozen evidence baseline, three product modes and revised implementation order.
-- [NEAR testnet escrow specification](docs/NEAR_TESTNET_ESCROW_SPEC.md) — the isolated test-token state machine, roles, storage, liabilities and local integration-test requirements.
+```bash
+npm run test:near-contracts      # preferred gate before any deployment
+npm run deploy:near-testnet      # guarded; requires typing DEPLOY-TESTNET
+```
 
-The repository also contains an isolated NEAR Intents Agent API client. It is not connected as a generic x402 signer and is not needed for the simulation-only hackathon deployment.
+Until the Sandbox gate passes, a testnet deployment is a **provisional smoke test** on disposable accounts with WRT only. It is not local contract acceptance and not an audit. Say only what you demonstrated.
 
-## License and status
+![](assets/divider.svg)
 
-This repository is a private MVP (`package.json` sets `private: true`). Do not treat the demo as a custody service, a production payment processor or a guarantee of provider performance.
+## 📚 Docs 📚
 
+| Guide | Covers |
+| --- | --- |
+| [Deployment](docs/DEPLOYMENT.md) | Safe single-instance demo deployment and preflight |
+| [Demo credits](docs/DEMO_CREDITS.md) | Limits, reservation accounting and privacy |
+| [Quote and procurement](docs/QUOTE_AND_PROCUREMENT.md) | Discovery, provider matching, quote validation and dependency handoff |
+| [Execution orchestration](docs/EXECUTION_ORCHESTRATION.md) | Commissioning state, task tracking, artifact evaluation and acceptance |
+| [Sandbox and handoff](docs/SANDBOX_AND_HANDOFF.md) | Hash-bound dependencies, fresh downstream boundaries and replayable branches |
+| [Schema contracts](docs/SCHEMA_CONTRACTS.md) | Versioned records, canonical serialization and SHA-256 commitments |
+| [Evidence pipeline](docs/EVIDENCE_PIPELINE.md) | Safe source capture, committed evidence packets and typed deterministic checks |
+| [Evidence quality policy](docs/EVIDENCE_QUALITY_POLICY.md) | Publisher authority, freshness, provenance, conflicts and packet-bound human review |
+| [Evidence freshness calibration](docs/EVIDENCE_FRESHNESS_CALIBRATION.md) | Cadence rationale, operating tolerances and regulatory currentness |
+| [Publisher registry research](docs/PUBLISHER_REGISTRY_RESEARCH_NIGERIA_FINTECH.md) | Inactive Nigeria fintech exact-host candidates and promotion requirements |
+| [Publisher registry owner review](docs/PUBLISHER_REGISTRY_OWNER_REVIEW.md) | Pending deployment-owner review; no candidate is activated |
+| [x402 payment authorization](docs/X402_PAYMENT_AUTHORIZATION.md) | Protocol mismatch, signer boundary and live-spending blockers |
+| [Hackathon scope reset](docs/HACKATHON_SCOPE_RESET.md) | The frozen evidence baseline, three product modes and implementation order |
+| [Escrow specification](docs/NEAR_TESTNET_ESCROW_SPEC.md) | State machine, roles, storage, liabilities and integration-test requirements |
+| [Escrow method reference](docs/NEAR_ESCROW_METHODS.md) | Terms fields, every method, its caller and behaviour |
+| [Testnet deployment runbook](docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md) | Accounts, deployment, on-chain verification and the optional one-WRT smoke test |
+| [Browser QA report](docs/BROWSER_QA_REPORT.md) | Step 6 simulation journey, branches, keyboard and 390px layout checks |
+| [Windows notes](docs/WINDOWS_DEVELOPMENT.md) | PowerShell usage and NTFS permission handling for the private stores |
 
-NEAR Rust formatting and validation: run `npm run format:near-contracts` once when updating Rust sources, then `npm run check:near-host` for the non-mutating formatting, Clippy and unit-test gate. The full `npm run test:near-contracts` gate also Clippys the integration-test crate before running NEAR Sandbox tests.
+![](assets/divider.svg)
 
-## Optional NEAR testnet escrow proof
+## 📜 Disclaimer & License 📜
 
-The escrow and WRT contracts are a separate testnet-only proof and are not connected to Agent Market paid commissioning. See [`docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md`](docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md) for the guarded near-cli-rs deployment flow, on-chain verification commands, optional one-WRT smoke lifecycle, and submission claim boundaries. The latest source still requires the local Sandbox acceptance gate; if that cannot be completed before a provisional hackathon testnet smoke, use disposable `.testnet` accounts and explicitly disclose that limitation.
+For research and education only. WorkRelay is not a custody service, a production payment processor, a guarantee of provider performance, investment advice or legal advice.
+
+- **Untrusted by design.** Provider listings and quotes are external input. Work-package budgets are ceilings, and the actual quote is evaluated separately. A testnet transaction does not prove mainnet safety, audited correctness, research truth or payment readiness.
+- **Built with AI assistance.** The code and documentation were produced with AI assistance. Correctness claims in this README are limited to the test and build gates it names.
+- **No dependencies at runtime.** `package.json` declares none. The contracts use `near-sdk` and `near-workspaces` with versions locked in `Cargo.toml` and `Cargo.lock`.
+- **License.** This is a private MVP (`package.json` sets `private: true`) and no open-source license is granted.
+
+<p align="center">
+  <img src="assets/footer.svg" alt="" width="100%" height="90">
+</p>
