@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { securePrivateFileSync } from './private-file-permissions.js';
 
 // Single-process file store for execution records. Not a distributed lock/database.
 export function createExecutionRecordStore(directory) {
@@ -18,6 +19,7 @@ export function createExecutionRecordStore(directory) {
       const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
       try {
         await writeFile(temporary, `${JSON.stringify(execution, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+        securePrivateFileSync(temporary);
         await rename(temporary, target);
       } catch (error) {
         await unlink(temporary).catch(() => {});

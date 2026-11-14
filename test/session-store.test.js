@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSessionStore } from '../src/orchestration/session-store.js';
+import { assertPrivateFilePermissions } from '../test-support/assert-private-file.js';
 
 function withTempDir(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'workrelay-session-store-'));
@@ -77,7 +78,7 @@ test('file-backed session file is private and malformed persistence fails closed
   const filePath = join(dir, 'sessions.json');
   const store = createSessionStore({ filePath });
   store.set('safe', { id: 'safe' });
-  assert.equal(statSync(filePath).mode & 0o777, 0o600);
+  assertPrivateFilePermissions(filePath);
   const raw = JSON.parse(readFileSync(filePath, 'utf8'));
   assert.equal(raw.version, 1);
   writeFileSync(filePath, '{not-json', 'utf8');

@@ -60,7 +60,11 @@ function updateCreditBalance(balance) {
 
 $('#mode').addEventListener('change', () => {
   const selectedMode = $('#mode').value;
-  if (!currentSession) currentMode = selectedMode;
+  if (!currentSession) {
+    currentMode = selectedMode;
+    $('#mode-pill').textContent = selectedMode === 'demo' ? 'SIMULATED MODE' : 'LIVE MODE SELECTED';
+    $('#mode-pill').removeAttribute('data-state');
+  }
   $('#currency-label').textContent = selectedMode === 'demo' ? 'DEMO USD' : 'USDC';
   $('#budget').max = selectedMode === 'demo' ? '5' : '1000000';
   $('#budget').value = selectedMode === 'demo' ? '5' : '10';
@@ -74,6 +78,7 @@ $('#mode').addEventListener('change', () => {
 
 $('#task-form').addEventListener('submit', async (event) => {
   event.preventDefault();
+  const submittedMode = $('#mode').value;
   const button = event.submitter || $('#task-form button[type="submit"]');
   const objective = $('#objective').value.trim();
   button.disabled = true;
@@ -103,6 +108,14 @@ $('#task-form').addEventListener('submit', async (event) => {
   } catch (error) {
     $('#notice').className = 'notice warn';
     $('#notice').textContent = error.message;
+    // Do not leave the default SIMULATED pill visible after a failed live
+    // discovery attempt when no project has been opened.
+    if (!currentSession) {
+      $('#mode-pill').textContent = submittedMode === 'live'
+        ? 'LIVE DISCOVERY FAILED'
+        : 'DEMO PLAN FAILED';
+      $('#mode-pill').dataset.state = 'error';
+    }
   } finally {
     button.disabled = false;
     button.innerHTML = 'Build project plan <span>→</span>';
@@ -344,23 +357,118 @@ function renderExecution(data) {
   if (!execution) return;
   $('#execution-warning').textContent = execution.warning || 'Execution status loaded.';
   $('#execution-mode-pill').textContent = execution.mode === 'simulation_only' ? 'SIMULATION ONLY' : 'RECORDED EXECUTION';
+  const sandboxControls = $('#sandbox-controls');
+  sandboxControls.classList.toggle('hidden', execution.mode !== 'simulation_only');
+  sandboxControls.querySelectorAll('.sandbox-scenario').forEach((button) => {
+    button.disabled = false;
+    button.textContent = button.dataset.scenario === execution.sandbox?.scenario ? `Run ${button.dataset.scenario.replaceAll('_', ' ')} again` : button.textContent;
+  });
   $('#execution-packages').innerHTML = (execution.packages || []).map((workPackage) => {
     const evaluation = workPackage.evaluation || { status: 'not_evaluated', results: [] };
     const evaluationHtml = evaluation.status === 'not_evaluated' ? '' : `<div class="evaluation"><strong>Structural evaluation: ${esc(String(evaluation.status).replaceAll('_', ' '))}</strong><p>${esc(evaluation.limitation || 'Structural checks only; factual accuracy and source validity have not been verified.')}</p>${(evaluation.results || []).map((result) => `<div class="check-row"><span>${result.passed ? '✓' : '×'} ${esc(result.criterion)}</span><small>${esc(result.evidence)}</small></div>`).join('')}</div>`;
+    const evidence = workPackage.evidencePacket?.verification;
+    const evidenceHtml = evidence ? `<div class="evaluation"><strong>Evidence packet: ${esc(evidence.status)}</strong><p>${esc(evidence.limitation || 'Typed evidence checks only; factual truth is not established.')}</p>${(evidence.checks || []).map((check) => `<div class="check-row"><span>${esc(check.status)} · ${esc(check.type)}</span><small>${esc(check.detail)}</small></div>`).join('')}</div>` : '';
+    const quality = workPackage.evidencePacket?.qualityEvaluation;
+    const qualityHtml = quality ? `<div class="evaluation evidence-quality"><strong>Evidence quality policy: ${esc(quality.status.replaceAll('_', ' '))}</strong><p>${esc(quality.limitation || 'Source authority, freshness and corroboration checks are policy signals; human review remains distinct from factual truth.')}</p><div class="check-row"><span>Human review · ${esc(quality.reviewStatus.replaceAll('_', ' '))}</span><small>Packet-bound review commitment: ${esc(quality.reviewDigest || 'not recorded')}</small></div>${(quality.checks || []).map((check) => `<div class="check-row"><span>${esc(check.status)} · ${esc(check.type)}</span><small>${esc(check.detail)}</small></div>`).join('')}${(quality.sourceAssessments || []).map((source) => `<div class="check-row"><span>Source ${esc(source.sourceId)} · ${esc(source.captureStatus)} · freshness ${esc(source.freshnessStatus || 'not assessed')}</span><small>${esc(source.domain || 'invalid host')} · authority ${esc(source.authorityTier)} · publisher group ${esc(source.publisherGroup || 'unregistered')} · scope ${esc((source.authorityScope || []).join('; ') || 'unregistered')} · permitted claims ${esc((source.permittedClaimTypes || []).join(', ') || 'none')} · registry ${esc(source.authorityRegistryStatus || 'unregistered')} · valid until ${esc(source.authorityRegistryValidUntil || 'not recorded')} · retrieval window ${esc(source.maxRetrievalAgeDays ?? 'not configured')} days${(source.attributionSignals || []).map((signal) => ` · attribution ${esc(signal.type)}: ${esc(signal.label)}`).join('')}</small></div>`).join('')}${(quality.claimAssessments || []).map((claim) => `<div class="check-row"><span>Claim ${esc(claim.claimId)} · corroboration ${esc(claim.corroborationStatus)} · conflict ${esc(claim.conflictAssessment?.status || 'none')} · current-law status ${esc(claim.regulatoryCurrentStatus?.status || 'not applicable')}</span><small>Supporting sources: ${esc((claim.supportingSourceIds || []).join(', ') || 'none')} · registered publisher groups: ${esc((claim.publisherGroups || []).join(', ') || 'none')}${(claim.possibleDerivativePairs || []).map((pair) => ` · possible shared/derivative text: ${esc(pair.sourceIds.join(' ↔ '))} (${esc(pair.similarity)})`).join('')}${(claim.possibleCommonOriginPairs || []).map((pair) => ` · repeated attribution/origin label: ${esc(pair.sourceIds.join(' ↔ '))} (${esc(pair.attributionLabel)})`).join('')}${claim.conflictAssessment?.status === 'adjudicated' ? ` · conflict reviewer: ${esc(claim.conflictAssessment.reviewerId || 'recorded')}` : ''}</small></div>`).join('')}</div>` : '';
     const actions = workPackage.status === 'delivered_pending_evaluation'
       ? `<button class="secondary action-evaluate" data-id="${esc(workPackage.packageId)}">Run structural checks</button>`
       : workPackage.status === 'awaiting_human_review'
         ? `<div class="review-actions"><button class="secondary action-review" data-id="${esc(workPackage.packageId)}" data-decision="accept">Accept deliverable</button><button class="ghost action-review" data-id="${esc(workPackage.packageId)}" data-decision="request_revision">Request revision</button></div>`
         : '';
+    const downstreamActions = workPackage.status === 'queued_waiting_for_downstream_quote'
+      ? `<button class="secondary action-downstream-quote" data-id="${esc(workPackage.packageId)}">Request fresh simulated downstream quote</button>`
+      : workPackage.status === 'queued_waiting_for_downstream_approval'
+        ? `<div class="lifecycle-note">Fresh simulated quote: ${esc(money(workPackage.simulatedDownstreamQuote?.price, workPackage.simulatedDownstreamQuote?.currency || 'DEMO USD'))} · input bundle ${esc(workPackage.simulatedDownstreamQuote?.inputBundleHash || 'not recorded')}<br><button class="secondary action-downstream-approve" data-id="${esc(workPackage.packageId)}">Approve downstream package separately</button></div>`
+        : '';
     const waiting = workPackage.status === 'queued_waiting_for_dependencies'
       ? `<div class="notice">Waiting for upstream human acceptance: ${esc((workPackage.waitingOn || workPackage.dependsOn || []).join(', '))}. A dependent package cannot start based on delivery alone.</div>` : '';
     const inputNote = (workPackage.dependencyInputs || []).length
       ? `<div class="lifecycle-note">Accepted upstream inputs consumed: ${(workPackage.dependencyInputs || []).map((source) => `${esc(source.packageId)} · SHA-256 ${esc(source.contentHash)}`).join(' | ')}. New simulated request fingerprint: ${esc(workPackage.dependencyHandoff?.requestFingerprint || 'not recorded')}.</div>` : '';
-    return `<article class="execution-card"><header><div><span class="package-index">${esc(workPackage.packageId)}</span><h3>${esc(workPackage.title)}</h3><p>${esc(workPackage.providerName || workPackage.provider || 'Provider')} · ${esc(workPackage.taskId || 'Task ID unavailable')}</p></div><span class="status">${esc(String(workPackage.status || 'unknown').replaceAll('_', ' ').toUpperCase())}</span></header>${waiting}<pre>${esc(workPackage.deliverable || 'Waiting for eligible upstream inputs…')}</pre>${inputNote}${evaluationHtml}${actions}</article>`;
+    return `<article class="execution-card"><header><div><span class="package-index">${esc(workPackage.packageId)}</span><h3>${esc(workPackage.title)}</h3><p>${esc(workPackage.simulationLabel || workPackage.providerName || workPackage.provider || 'Provider')} · ${esc(workPackage.taskId || 'Task ID unavailable')}</p></div><span class="status">${esc(String(workPackage.status || 'unknown').replaceAll('_', ' ').toUpperCase())}</span></header>${waiting}<pre>${esc(workPackage.deliverable || 'Waiting for eligible upstream inputs…')}</pre>${inputNote}${downstreamActions}${evidenceHtml}${qualityHtml}${evaluationHtml}${actions}</article>`;
   }).join('');
   renderWorkflow(data.workflow || currentProject?.workflow);
   const report = data.report || currentProject?.report;
   if (report) renderFinalReport(report);
+  sandboxControls.querySelectorAll('.sandbox-scenario').forEach((button) => button.addEventListener('click', () => runSandboxScenario(button.dataset.scenario, button)));
+  sandboxControls.querySelector('#sandbox-reset').onclick = () => resetSandbox(sandboxControls.querySelector('#sandbox-reset'));
+  document.querySelectorAll('.action-downstream-quote').forEach((button) => button.addEventListener('click', () => manageDownstreamQuote('quote', button)));
+  document.querySelectorAll('.action-downstream-approve').forEach((button) => button.addEventListener('click', () => manageDownstreamQuote('approve', button)));
+
+  // Bind the simulation review controls after every execution render. These
+  // buttons are recreated with innerHTML, so their handlers must be rebound
+  // each time the execution cards are refreshed.
+  $('#execution-packages').querySelectorAll('.action-evaluate').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Running structural checks…';
+      $('#execution-warning').textContent = 'Checking structural completeness only; factual accuracy and source validity are not verified.';
+      try {
+        await executionAction('/api/evaluate', button.dataset.id);
+      } catch (error) {
+        $('#execution-warning').textContent = error.message;
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    });
+  });
+
+  $('#execution-packages').querySelectorAll('.action-review').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const decision = button.dataset.decision;
+      if (decision === 'accept') {
+        const confirmed = window.confirm('Accept this simulated deliverable as the project owner? This records human acceptance only. It does NOT verify factual accuracy, settle payment, or authorize any payment.');
+        if (!confirmed) return;
+      }
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = decision === 'accept' ? 'Recording acceptance…' : 'Recording revision request…';
+      $('#execution-warning').textContent = decision === 'accept'
+        ? 'Recording explicit human acceptance. Payment settlement remains separate.'
+        : 'Recording your request for revision. No payment state is changed.';
+      try {
+        await executionAction('/api/review', button.dataset.id, { decision });
+      } catch (error) {
+        $('#execution-warning').textContent = error.message;
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    });
+  });
+}
+
+async function manageDownstreamQuote(action, button) {
+  button.disabled = true;
+  button.textContent = action === 'quote' ? 'Requesting fresh simulated quote…' : 'Recording separate approval…';
+  try {
+    const response = await apiFetch(`/api/demo/downstream/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: currentSession, packageId: button.dataset.id }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Downstream sandbox action failed');
+    currentProject = { ...currentProject, execution: data.execution, report: data.report, workflow: data.workflow };
+    renderExecution(data);
+  } catch (error) { $('#execution-warning').textContent = error.message; button.disabled = false; }
+}
+
+async function runSandboxScenario(scenario, button) {
+  button.disabled = true;
+  try {
+    const response = await apiFetch('/api/demo/scenario', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: currentSession, scenario }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Sandbox scenario failed');
+    currentProject = { ...currentProject, execution: data.execution, report: data.report, workflow: data.workflow };
+    renderExecution(data);
+  } catch (error) { $('#execution-warning').textContent = error.message; }
+}
+
+async function resetSandbox(button) {
+  button.disabled = true;
+  try {
+    const response = await apiFetch('/api/demo/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: currentSession }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Sandbox reset failed');
+    currentProject = { ...currentProject, execution: data.execution, report: data.report, workflow: data.workflow };
+    renderExecution(data);
+  } catch (error) { $('#execution-warning').textContent = error.message; }
 }
 
 function renderWorkflow(workflow) {

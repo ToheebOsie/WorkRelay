@@ -14,6 +14,14 @@
     "plan": "node scripts/plan-project.mjs",
     "quote": "node scripts/quote-project.mjs",
     "probe": "node scripts/probe-provider.mjs",
-    "start": "node src/app-server.js"
+    "validate:publisher-candidates": "node scripts/validate-publisher-candidates.mjs",
+    "start": "node src/app-server.js",
+    "build:near-contracts": "bash scripts/build-near-contracts.sh",
+    "test:near-contracts": "bash scripts/test-near-contracts.sh",
+    "test:near-terms": "node --test test/near-escrow-terms.test.js",
+    "check:near-host": "bash scripts/check-near-host.sh",
+    "format:near-contracts": "bash scripts/format-near-contracts.sh",
+    "deploy:near-testnet": "bash scripts/deploy-near-testnet.sh",
+    "prepare:near-testnet-demo-terms": "node scripts/prepare-near-testnet-demo-terms.mjs"
   }
 }

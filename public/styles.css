@@ -64,3 +64,40 @@ button:disabled{opacity:.56;cursor:not-allowed;transform:none!important}
 
 /* Checkpoint 16 — explicit owner-attested ambiguity reconciliation */
 .reconcile-panel{margin:14px 0;padding:15px;border:1px solid #705d36;border-radius:8px;background:#211d16;color:#e8d5a6}.reconcile-panel p{line-height:1.55}.reconcile-panel label{margin:12px 0 7px}.reconcile-panel input,.reconcile-panel select{margin-bottom:6px}.reconcile-attest{display:flex!important;align-items:flex-start;gap:9px;line-height:1.45}.reconcile-attest input{width:auto;margin-top:2px}.reconcile-panel button{margin-top:8px}.dispatch-panel{margin:14px 0;padding:15px;border:1px solid #34414e;border-radius:8px;background:#111922}
+
+
+/* Step 6 visual review — readable light evidence and evaluation surfaces.
+   These cards intentionally use light backgrounds inside the dark workspace,
+   so they must not inherit the page's light-on-dark text tokens. */
+.execution-card {
+  color: #26313a;
+  background: #ffffff;
+}
+.execution-card h3 { color: #17212b; }
+.execution-card .package-index,
+.execution-card header p { color: #52616d; }
+.execution-card .evaluation {
+  color: #26313a;
+  background: #f7f6f3;
+}
+.execution-card .evaluation > strong { color: #17212b; }
+.execution-card .evaluation p { color: #52616d; }
+.execution-card .evaluation .check-row span { color: #26313a; }
+.execution-card .evaluation .check-row small { color: #52616d; }
+.execution-card .review-actions .secondary {
+  background: #dce9f5;
+  color: #101820;
+  opacity: 1;
+}
+.execution-card .review-actions .ghost {
+  background: #ffffff;
+  color: #26313a;
+  border-color: #83909b;
+}
+.execution-card .review-actions button:disabled { opacity: .72; }
+.execution-card button:focus-visible {
+  outline: 3px solid #2e74c8;
+  outline-offset: 2px;
+}
+
+.step[data-state="error"] { color: #ff9d91; border-color: #70504a; }

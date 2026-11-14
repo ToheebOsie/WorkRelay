@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, stat, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createExecutionRecordStore } from '../src/storage/execution-record-store.js';
+import { assertPrivateFilePermissions } from '../test-support/assert-private-file.js';
 
 async function temp(t) {
   const dir = await mkdtemp(join(tmpdir(), 'workrelay-exec-store-'));
@@ -15,8 +16,7 @@ const record = (executionId = 'exec-1234567890abcdef') => ({ executionId, packag
 test('execution record store persists, reloads, and atomically updates execution records', async (t) => {
   const dir = await temp(t); const store = createExecutionRecordStore(dir); const value = record();
   await store.save(value);
-  const mode = (await stat(store.pathFor(value.executionId))).mode & 0o777;
-  assert.equal(mode, 0o600);
+  assertPrivateFilePermissions(store.pathFor(value.executionId));
   value.status = 'dispatch_blocked_reconciliation_required';
   await store.save(value);
   assert.equal((await createExecutionRecordStore(dir).load(value.executionId)).status, value.status);

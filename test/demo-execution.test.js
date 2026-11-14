@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createDemoExecution, runDemoExecution, evaluateDemoDeliverable, reviewDemoDeliverable, buildDemoFinalReport } from '../src/orchestration/demo-execution.js';
+import { approveDemoDownstreamQuote, createDemoExecution, requestDemoDownstreamQuote, resetDemoExecution, runDemoExecution, runDemoScenario, evaluateDemoDeliverable, reviewDemoDeliverable, buildDemoFinalReport } from '../src/orchestration/demo-execution.js';
 
 const proposal = { status:'simulation_only', proposalId:'p1', packages:[
   {packageId:'a',title:'Evidence gathering',brief:'Gather evidence for the task',acceptanceCriteria:['Include source URLs'],recommendation:{provider:'researcher',providerName:'Demo Researcher',price:1,currency:'USD'}},
@@ -17,7 +17,7 @@ test('demo execution only accepts simulation proposals and creates disclosed tas
 test('runs provider-shaped simulated tasks and records content hashes',()=>{
   const ex=runDemoExecution(createDemoExecution(proposal));
   assert.equal(ex.status,'deliverables_ready_for_review');
-  for(const pkg of ex.packages){assert.equal(pkg.status,'delivered_pending_evaluation');assert.equal(pkg.contentHash.length,64);assert.match(pkg.deliverable,/DEMONSTRATION OUTPUT/);}
+  for(const pkg of ex.packages){assert.equal(pkg.status,'delivered_pending_evaluation');assert.equal(pkg.contentHash.length,64);assert.match(pkg.deliverable,/DEMONSTRATION OUTPUT/);assert.equal(pkg.evidencePacket.record.rawArtifactHash,pkg.contentHash);assert.equal(pkg.evidencePacket.verification.status,'check_failed');}
 });
 test('structural evaluation is separate from human acceptance',()=>{
   const ex=runDemoExecution(createDemoExecution(proposal));
@@ -60,6 +60,15 @@ test('dependent simulated work waits for upstream evaluation and acceptance, the
   reviewDemoDeliverable(ex, 'research', 'accept');
   runDemoExecution(ex);
   const synthesis = ex.packages.find((item) => item.packageId === 'synthesis');
+  assert.equal(synthesis.status, 'queued_waiting_for_downstream_quote');
+  const quote = requestDemoDownstreamQuote(ex, 'synthesis');
+  assert.equal(quote.status, 'quoted_not_approved');
+  assert.equal(quote.freshQuote, true);
+  runDemoExecution(ex);
+  assert.equal(synthesis.status, 'queued_waiting_for_downstream_approval');
+  approveDemoDownstreamQuote(ex, 'synthesis');
+  assert.equal(synthesis.simulatedDownstreamQuote.status, 'approved');
+  runDemoExecution(ex);
   assert.equal(synthesis.status, 'delivered_pending_evaluation');
   assert.equal(synthesis.dependencyInputs.length, 1);
   assert.equal(synthesis.dependencyInputs[0].packageId, 'research');
@@ -67,4 +76,42 @@ test('dependent simulated work waits for upstream evaluation and acceptance, the
   assert.match(synthesis.deliverable, /Accepted upstream context received/);
   assert.match(synthesis.deliverable, /BEGIN UNTRUSTED UPSTREAM ARTIFACT/);
   assert.equal(synthesis.dependencyHandoff.quoteStatus, 'not_applicable_simulation');
+});
+
+test('sandbox branches expose success, revision, refund and unresolved-dispute paths without settlement', () => {
+  for (const scenario of ['success', 'revision', 'refund_before_submission', 'unresolved_dispute']) {
+    const ex = createDemoExecution(proposal);
+    runDemoScenario(ex, scenario);
+    assert.equal(ex.sandbox.scenario, scenario);
+    assert.equal(ex.sandbox.settlement, 'not_applicable_simulation');
+    assert.match(ex.simulationLabel, /SIMULATED/);
+    assert.ok(ex.ledger.some((entry) => entry.event.includes('demo_')));
+  }
+  const success = createDemoExecution(proposal);
+  runDemoScenario(success, 'success');
+  assert.equal(success.status, 'success_all_packages_accepted');
+  const revision = createDemoExecution(proposal);
+  runDemoScenario(revision, 'revision');
+  assert.equal(revision.status, 'revision_required');
+  assert.ok(revision.packages.some((pkg) => pkg.acceptance.status === 'revision_requested'));
+  const refund = createDemoExecution(proposal);
+  runDemoScenario(refund, 'refund_before_submission');
+  assert.equal(refund.status, 'refunded_before_submission');
+  assert.ok(refund.packages.every((pkg) => pkg.deliverable === null));
+  const dispute = createDemoExecution(proposal);
+  runDemoScenario(dispute, 'unresolved_dispute');
+  assert.equal(dispute.status, 'unresolved_dispute');
+  assert.ok(dispute.packages.some((pkg) => pkg.acceptance.status === 'dispute_open'));
+});
+
+test('sandbox reset clears prior outputs and makes replay possible', () => {
+  const ex = createDemoExecution(proposal);
+  runDemoScenario(ex, 'success');
+  const oldExecutionId = ex.executionId;
+  resetDemoExecution(ex);
+  assert.equal(ex.executionId, oldExecutionId);
+  assert.equal(ex.status, 'queued');
+  assert.ok(ex.packages.every((pkg) => pkg.status === 'queued' && pkg.deliverable === null && pkg.evidencePacket === null));
+  runDemoExecution(ex);
+  assert.ok(ex.packages.some((pkg) => pkg.status === 'delivered_pending_evaluation'));
 });

@@ -1,6 +1,6 @@
 # WorkRelay
 
-**An autonomous contractor for the NEAR Agent Economy.** WorkRelay turns a project objective and budget into a plan, finds specialist agents, compares provider quotes, coordinates work packages, evaluates deliverables and records project provenance.
+**An evidence-backed research procurement workflow.** WorkRelay structures a narrow buyer decision into work packages, compares unpaid provider quotes, coordinates accepted handoffs and presents claim/source evidence that reviewers can inspect. Its NEAR testnet escrow is a separate optional proof, not payment to an Agent Market provider.
 
 ## Current status
 
@@ -8,9 +8,36 @@ WorkRelay is a hackathon MVP with three deliberately distinct capabilities:
 
 - **Simulation:** a no-wallet demo with sample providers, illustrative prices and simulated deliverables. Outputs are not live research or real provider work.
 - **Live discovery and quote inspection:** public Agent Market discovery and unpaid A2A quote requests. A quote is not an approval, commission or payment.
-- **Paid execution:** **not deployment-ready**. No wallet signer is bundled. The current app-server accepts EVM buyer networks (Base, Polygon and Arbitrum), while the current Agent Market A2A hiring guide documents a NEAR-mainnet delegated-transfer profile. These flows have not been reconciled. The exact historical shared recipient remains unverified, and the dispatch route needs an atomic duplicate-dispatch guard before live spending.
+- **NEAR testnet proof:** a separate JobEscrow contract and WorkRelay Test Token (`WRT`, six decimals) are implemented. The operator reports that Rust host gates, Clippy and both WASM builds pass on Rust 1.97.0. The six local NEAR Sandbox integration tests have not executed because the Sandbox binary download was blocked. No wallet UI or testnet deployment exists. This proof will not pay an Agent Market provider.
+- **Live Agent Market payment:** out of scope and disabled. No wallet signer is bundled. The current app-server accepts EVM buyer networks (Base, Polygon and Arbitrum), while the current Agent Market A2A hiring guide documents a NEAR-mainnet delegated-transfer profile. These flows have not been reconciled. The exact historical shared recipient remains unverified, and the dispatch route needs an atomic duplicate-dispatch guard before live spending.
 
-The Checkpoint 16 regression baseline is 161 passing tests. Those tests use mocks and local HTTP fixtures; they do not prove live paid execution. See [payment safety](docs/X402_PAYMENT_AUTHORIZATION.md).
+The accepted Step 7 Increment 5 evidence baseline had 220 passing tests on Windows. The current source includes four separate NEAR terms tests plus Node regression guards for transaction-result handling, non-mutating formatting and revision-deadline dispute handling; the current Node suite passes 228/228 in this Linux environment. The operator reports both WASM builds passed, but Node tests and host/WASM compilation do not establish on-chain state-machine behavior; the NEAR Sandbox integration gate remains outstanding. See [payment safety](docs/X402_PAYMENT_AUTHORIZATION.md).
+
+**Step 6 browser QA is accepted and closed.** The operator reports that the full simulation journey, four scenario branches, reset/replay, visual contrast, keyboard controls, report export, browser diagnostics, 390px layout and native Windows regression run passed. Live marketplace availability itself was not verified because the marketplace host was unreachable in the test environment. See [the Step 6 browser QA report](docs/BROWSER_QA_REPORT.md).
+
+**Evidence-quality baseline:** Step 7 Increment 5 is frozen as the current hackathon baseline. The research-backed Nigeria fintech candidate publisher pack remains inactive. Further publisher-governance expansion is deferred so the hackathon effort can focus on the separate testnet escrow proof. See [the evidence quality policy](docs/EVIDENCE_QUALITY_POLICY.md) and [the hackathon scope reset](docs/HACKATHON_SCOPE_RESET.md).
+
+## NEAR contract source draft (not yet accepted)
+
+The repository now contains:
+
+- `contracts/job-escrow` — one buyer, one assigned NEAR account provider, one named resolver, one exact allowlisted WRT contract and immutable job terms.
+- `contracts/workrelay-test-token` — WorkRelay-controlled NEP-141/NEP-145/NEP-148 token, WRT, fixed at six decimals and labelled no monetary value.
+- `contracts/integration-tests` — NEAR Sandbox integration tests that deploy the compiled WASM and exercise roles, deposits, state transitions, claims, failed withdrawals, and accounting.
+
+The operator reports that host compilation, Clippy and both WASM builds pass on Rust 1.97.0. The NEAR Sandbox integration suite has not run because the Sandbox binary download was blocked. This ChatGPT environment lacks Rust/Cargo and NEAR Sandbox tooling, so it cannot independently rerun those gates. The current ZIP does not include Cargo.lock; preserve the lockfile generated by the passing Rust environment. Testnet deployment still requires all six Sandbox integration tests to pass. See the [testnet deployment runbook](docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md) and the [contract workspace guide](contracts/README.md).
+
+On Windows, run the Rust/NEAR build inside WSL2 Ubuntu, not Git Bash. Run the commands from the repository root. If rustup cannot download the pinned `1.97.0` channel but your installed `stable` reports `rustc 1.97.0`, set `export RUSTUP_TOOLCHAIN=stable` for the session; otherwise use the pinned toolchain:
+
+```bash
+npm test
+npm run validate:publisher-candidates
+npm run format:near-contracts    # run once to format Rust sources
+npm run check:near-host          # read-only format + Clippy + unit gate
+npm run test:near-contracts      # WASM + integration Clippy + NEAR Sandbox
+```
+
+Before validation, run `npm run format:near-contracts` once to apply rustfmt; retain the formatted source. The host check is non-mutating: it verifies formatting, generates/uses `Cargo.lock`, runs Clippy with warnings denied and runs both Rust contract unit-test suites. The full contract script builds WASM, Clippys the integration-test crate with warnings denied, runs local Sandbox integration tests, and reruns the Node suite and inactive-candidate validator. It does not deploy to testnet. The repository toolchain is Rust 1.97.0; the workspace declares Rust 1.95 as its minimum. The WASM target is deliberately not auto-requested by `rust-toolchain.toml`, so host gates can run without it; install it separately for the WASM/Sandbox gates with `rustup target add wasm32-unknown-unknown --toolchain 1.97.0` (or `--toolchain stable` when using the verified stable override).
 
 ## Requirements and quick start
 
@@ -19,8 +46,13 @@ The Checkpoint 16 regression baseline is 161 passing tests. Those tests use mock
 
 ```bash
 npm test
+npm run validate:publisher-candidates
 npm start
 ```
+
+The publisher-candidate validation checks the inactive Nigeria fintech candidate pack. It does not activate or trust any publisher domain.
+
+Windows developers: run the same commands in PowerShell. The private persistence stores apply restrictive NTFS ACLs with `icacls.exe` on Windows; POSIX systems use file mode `0600`. See [Windows development and test notes](docs/WINDOWS_DEVELOPMENT.md).
 
 The server listens on port `4173` by default. Open `http://localhost:4173` for the browser app. Set `PORT` to change the port.
 
@@ -62,10 +94,25 @@ See [deployment guide](docs/DEPLOYMENT.md) for environment setup, proxy, storage
 - [Demo credits](docs/DEMO_CREDITS.md) — limits, reservation accounting and privacy.
 - [Quote and procurement](docs/QUOTE_AND_PROCUREMENT.md) — discovery, provider matching, quote validation and dependency handoff.
 - [Execution orchestration](docs/EXECUTION_ORCHESTRATION.md) — commissioning state, task tracking, artifact evaluation and acceptance.
+- [Schema contracts](docs/SCHEMA_CONTRACTS.md) — versioned records, canonical serialization and SHA-256 commitments.
+- [Evidence pipeline](docs/EVIDENCE_PIPELINE.md) — safe source capture, committed evidence packets and typed deterministic checks.
+- [Evidence quality policy](docs/EVIDENCE_QUALITY_POLICY.md) — publisher authority policy, freshness, claim provenance, copied/attribution signals, conflict adjudication and packet-bound human review.
+- [Publisher registry owner-review worksheet](docs/PUBLISHER_REGISTRY_OWNER_REVIEW.md) — pending deployment-owner review; no candidates are activated.
+- [Publisher registry research](docs/PUBLISHER_REGISTRY_RESEARCH_NIGERIA_FINTECH.md) — inactive Nigeria fintech exact-host candidates and promotion requirements.
+- [Evidence freshness calibration](docs/EVIDENCE_FRESHNESS_CALIBRATION.md) — cadence rationale, operating tolerances and regulatory currentness semantics.
 - [x402 payment authorization](docs/X402_PAYMENT_AUTHORIZATION.md) — protocol mismatch, signer boundary and live-spending blockers.
+- [Hackathon scope reset](docs/HACKATHON_SCOPE_RESET.md) — the frozen evidence baseline, three product modes and revised implementation order.
+- [NEAR testnet escrow specification](docs/NEAR_TESTNET_ESCROW_SPEC.md) — the isolated test-token state machine, roles, storage, liabilities and local integration-test requirements.
 
 The repository also contains an isolated NEAR Intents Agent API client. It is not connected as a generic x402 signer and is not needed for the simulation-only hackathon deployment.
 
 ## License and status
 
 This repository is a private MVP (`package.json` sets `private: true`). Do not treat the demo as a custody service, a production payment processor or a guarantee of provider performance.
+
+
+NEAR Rust formatting and validation: run `npm run format:near-contracts` once when updating Rust sources, then `npm run check:near-host` for the non-mutating formatting, Clippy and unit-test gate. The full `npm run test:near-contracts` gate also Clippys the integration-test crate before running NEAR Sandbox tests.
+
+## Optional NEAR testnet escrow proof
+
+The escrow and WRT contracts are a separate testnet-only proof and are not connected to Agent Market paid commissioning. See [`docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md`](docs/NEAR_TESTNET_DEPLOYMENT_RUNBOOK.md) for the guarded near-cli-rs deployment flow, on-chain verification commands, optional one-WRT smoke lifecycle, and submission claim boundaries. The latest source still requires the local Sandbox acceptance gate; if that cannot be completed before a provisional hackathon testnet smoke, use disposable `.testnet` accounts and explicitly disclose that limitation.

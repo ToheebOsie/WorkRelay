@@ -1,0 +1,290 @@
+{
+  "schemaVersion": "workrelay.publisher-authority-candidates.v1",
+  "status": "candidate_only_not_active",
+  "researchObservedAt": "2026-11-14T00:00:00.000Z",
+  "purpose": "Deployment-specific exact-host candidates for Nigerian fintech research. This file is not a committed publisher-authority registry and is never loaded by the evidence evaluator.",
+  "promotionRequirements": [
+    "A deployment owner must independently confirm each exact hostname and its intended claim scope.",
+    "A human reviewer must assign publisher groups and authority tiers, record the evidence basis, set reviewedAt and validUntil, and commit a versioned registry through commitPublisherAuthorityRegistry().",
+    "Candidate presence must never be interpreted as approval, trust, factual reliability or source independence.",
+    "Publisher affiliation notes are review prompts; they do not automatically merge publisher groups or prove shared reporting.",
+    "The active v2 registry must preserve each candidate scope and permittedClaimTypes; a host tier alone must not confer blanket authority."
+  ],
+  "entries": [
+    {
+      "hostname": "cbn.gov.ng",
+      "publisherName": "Central Bank of Nigeria",
+      "publisherGroup": "central-bank-of-nigeria",
+      "proposedAuthorityTier": "regulator",
+      "scope": [
+        "CBN-issued policy and circulars",
+        "CBN-published monetary, banking and payment-system statistics",
+        "CBN reports and official statements"
+      ],
+      "basis": "Official CBN data and publications pages provide statistics, payment-system circulars, monthly and quarterly reports, annual statistical bulletins and other official publications.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "CBN Data & Statistics",
+          "url": "https://www.cbn.gov.ng/rates/",
+          "observedFact": "Lists daily data items, exchange-rate and financial data, a statistics database, annual and quarterly statistical bulletins, and survey reports."
+        },
+        {
+          "title": "CBN Publications and Documents",
+          "url": "https://www.cbn.gov.ng/Documents/",
+          "observedFact": "Lists circulars, payments-system guidelines, monthly reports, quarterly reports, annual reports and statistical publications."
+        }
+      ],
+      "permittedClaimTypes": [
+        "financial",
+        "numeric",
+        "market",
+        "regulatory",
+        "regulatory_current",
+        "daily_series",
+        "monthly_series",
+        "quarterly_series",
+        "annual_series"
+      ]
+    },
+    {
+      "hostname": "statistics.cbn.gov.ng",
+      "publisherName": "Central Bank of Nigeria — Statistics Database",
+      "publisherGroup": "central-bank-of-nigeria",
+      "proposedAuthorityTier": "primary",
+      "scope": [
+        "CBN-hosted statistical database only"
+      ],
+      "basis": "The CBN Data & Statistics page links its Statistics Database to this exact host. It is grouped with cbn.gov.ng to prevent CBN subdomains from counting as separate corroborating publishers. The statistics subdomain is proposed as primary for CBN statistical data, not as a regulatory-instrument authority tier.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "CBN Data & Statistics",
+          "url": "https://www.cbn.gov.ng/rates/",
+          "observedFact": "The official CBN page links the Statistics Database to statistics.cbn.gov.ng."
+        }
+      ],
+      "permittedClaimTypes": [
+        "financial",
+        "numeric",
+        "market",
+        "daily_series",
+        "monthly_series",
+        "quarterly_series",
+        "annual_series"
+      ]
+    },
+    {
+      "hostname": "nigerianstat.gov.ng",
+      "publisherName": "National Bureau of Statistics",
+      "publisherGroup": "national-bureau-of-statistics",
+      "proposedAuthorityTier": "primary",
+      "scope": [
+        "NBS-issued official statistics",
+        "NBS methodology and release-calendar material"
+      ],
+      "basis": "The NBS 2026–2028 Service Charter identifies nigerianstat.gov.ng as the official NBS website and describes monthly, quarterly and annual statistical releases, including CPI and GDP reports.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "NBS Service Charter 2026–2028",
+          "url": "https://nigerianstat.gov.ng/resource/NBS_SERVICE_CHARTER.pdf",
+          "observedFact": "Identifies the official website and states that publications follow an approved Data Release Calendar, with monthly, quarterly and annual reports."
+        }
+      ],
+      "permittedClaimTypes": [
+        "numeric",
+        "market",
+        "monthly_series",
+        "quarterly_series",
+        "annual_series"
+      ]
+    },
+    {
+      "hostname": "www.nigerianstat.gov.ng",
+      "publisherName": "National Bureau of Statistics",
+      "publisherGroup": "national-bureau-of-statistics",
+      "proposedAuthorityTier": "primary",
+      "scope": [
+        "NBS-issued official statistics and publications"
+      ],
+      "basis": "The NBS Service Charter names www.nigerianstat.gov.ng as the official website. It shares the NBS publisher group with the apex host and must not count as independent corroboration. This is retained as a separate exact-host alias in the same NBS publisher group; it must never count as an independent publisher.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "NBS Service Charter 2026–2028",
+          "url": "https://nigerianstat.gov.ng/resource/NBS_SERVICE_CHARTER.pdf",
+          "observedFact": "Names www.nigerianstat.gov.ng as an official NBS access channel."
+        }
+      ],
+      "permittedClaimTypes": [
+        "numeric",
+        "market",
+        "monthly_series",
+        "quarterly_series",
+        "annual_series"
+      ]
+    },
+    {
+      "hostname": "sec.gov.ng",
+      "publisherName": "Securities and Exchange Commission Nigeria",
+      "publisherGroup": "securities-and-exchange-commission-nigeria",
+      "proposedAuthorityTier": "regulator",
+      "scope": [
+        "SEC-issued capital-market rules, fintech rules, notices and operator-register information"
+      ],
+      "basis": "The SEC official website publishes rules, regulations, circulars and a dedicated fintech rules page. The tier applies to SEC-issued instruments and records, not all third-party statements hosted or linked there.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "SEC Rules and Regulations",
+          "url": "https://sec.gov.ng/our-mandate/regulation/rules-and-regulations/",
+          "observedFact": "Lists rules and regulations, including digital-asset rules and subsequent amendments."
+        },
+        {
+          "title": "SEC Rules for FinTechs",
+          "url": "https://sec.gov.ng/our-mandate/regulation/rules-and-regulations/sec-rules-for-fintechs/",
+          "observedFact": "Provides a fintech-specific index of regulatory rules and guidance."
+        }
+      ],
+      "permittedClaimTypes": [
+        "financial",
+        "numeric",
+        "market",
+        "regulatory",
+        "regulatory_current",
+        "monthly_series",
+        "quarterly_series"
+      ]
+    },
+    {
+      "hostname": "ndic.gov.ng",
+      "publisherName": "Nigeria Deposit Insurance Corporation",
+      "publisherGroup": "nigeria-deposit-insurance-corporation",
+      "proposedAuthorityTier": "primary",
+      "scope": [
+        "NDIC-issued deposit-insurance, banking-system and institution data",
+        "NDIC annual reports and official statements"
+      ],
+      "basis": "NDIC identifies itself as an independent Federal Government agency administering Nigeria's deposit-insurance scheme and publishes annual reports and statements of accounts. Proposed primary tier is limited to NDIC's own reporting domain.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "NDIC 2025 Annual Report and Statement of Accounts",
+          "url": "https://ndic.gov.ng/storage/cms/media/2025-annual-report-2808753c-639b-43b4-bd41-aee19abd399b.pdf",
+          "observedFact": "The report identifies NDIC as an independent Federal Government agency and includes its own banking-sector tables and statements."
+        }
+      ],
+      "permittedClaimTypes": [
+        "financial",
+        "numeric",
+        "quarterly_series",
+        "annual_series"
+      ]
+    },
+    {
+      "hostname": "ndpc.gov.ng",
+      "publisherName": "Nigeria Data Protection Commission",
+      "publisherGroup": "nigeria-data-protection-commission",
+      "proposedAuthorityTier": "regulator",
+      "scope": [
+        "NDPC-issued data-protection laws, directives, guidance, notices and annual reports"
+      ],
+      "basis": "The Commission publishes its annual reports and the Nigeria Data Protection Act / General Application and Implementation Directive materials. Use for data-protection regulatory claims within its remit.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "NDPC Annual Report 2024",
+          "url": "https://ndpc.gov.ng/wp-content/uploads/2025/01/NDPC-Annual-Report-2024.pdf",
+          "observedFact": "Identifies NDPC and describes regulatory actions, including issuance of the General Application and Implementation Directive."
+        },
+        {
+          "title": "Nigeria Data Protection Act / GAID 2025",
+          "url": "https://ndpc.gov.ng/wp-content/uploads/2025/03/NDP-ACT-GAID-2025-MARCH-20TH.pdf",
+          "observedFact": "Official Commission-hosted text of the data-protection legal and implementation materials."
+        }
+      ],
+      "permittedClaimTypes": [
+        "regulatory",
+        "regulatory_current"
+      ]
+    },
+    {
+      "hostname": "nibss-plc.com.ng",
+      "publisherName": "Nigeria Inter-Bank Settlement System Plc",
+      "publisherGroup": "nigeria-inter-bank-settlement-system",
+      "proposedAuthorityTier": "primary",
+      "scope": [
+        "NIBSS-issued descriptions of its own payment infrastructure and first-party operational statistics"
+      ],
+      "basis": "NIBSS describes its incorporation, bank ownership and inter-bank payment/settlement infrastructure on its own site. Primary tier is restricted to its own data and operations; it is not a regulator or independent confirmation of CBN statements.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "About NIBSS",
+          "url": "https://nibss-plc.com.ng/about-nibss/",
+          "observedFact": "States that NIBSS is owned by licensed banks including CBN and describes its inter-bank payment infrastructure."
+        },
+        {
+          "title": "NIBSS recapitalisation and digital infrastructure article",
+          "url": "https://nibss-plc.com.ng/recapitalisation-nibss-digital-infrastructure-to-anchor-banks-new-growth-phase/",
+          "observedFact": "A first-party NIBSS media page containing payment-system and banking-sector statements."
+        }
+      ],
+      "permittedClaimTypes": [
+        "financial",
+        "numeric",
+        "market",
+        "daily_series",
+        "monthly_series",
+        "quarterly_series",
+        "annual_series"
+      ]
+    },
+    {
+      "hostname": "ngxgroup.com",
+      "publisherName": "Nigerian Exchange Group / Nigerian Exchange",
+      "publisherGroup": "nigerian-exchange-group",
+      "proposedAuthorityTier": "primary",
+      "scope": [
+        "NGX-issued market data, exchange notices, listed-issuer market records and NGX factbook material"
+      ],
+      "basis": "The official NGX site describes its real-time, end-of-day, reference and historical data products and an annual market-information factbook. This tier is limited to exchange-issued data and records.",
+      "reviewStatus": "requires_deployment_owner_review",
+      "supportingSources": [
+        {
+          "title": "NGX authorized market data vendors",
+          "url": "https://ngxgroup.com/exchange/data/vendors-list/",
+          "observedFact": "Identifies NGX as the exchange maintaining licensed market-data feeds and an authorized-vendor list."
+        },
+        {
+          "title": "NGX Factbook",
+          "url": "https://ngxgroup.com/exchange/data/x-factbook/",
+          "observedFact": "Describes an annual compendium of capital-market information, market statistics and listed-company profiles."
+        }
+      ],
+      "permittedClaimTypes": [
+        "financial",
+        "numeric",
+        "market",
+        "daily_series",
+        "monthly_series",
+        "quarterly_series",
+        "annual_series"
+      ]
+    }
+  ],
+  "affiliationReviewNotes": [
+    {
+      "publisherGroups": [
+        "central-bank-of-nigeria",
+        "nigeria-inter-bank-settlement-system"
+      ],
+      "relationship": "ownership_and_governance_affiliation",
+      "status": "documented_review_signal_not_automatic_group_merge",
+      "evidenceUrl": "https://nibss-plc.com.ng/about-nibss/",
+      "basis": "NIBSS states that it is owned by all licensed banks, including CBN, and that the CBN Deputy Governor for Financial System Stability chairs its board.",
+      "reviewInstruction": "Do not automatically count CBN and NIBSS material as independent corroboration merely because they are separate publisher groups. Review whether each claim rests on separately collected underlying data and disclose the institutional relationship."
+    }
+  ]
+}

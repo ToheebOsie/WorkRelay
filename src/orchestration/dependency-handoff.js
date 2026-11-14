@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { sha256Canonical } from '../contracts/schema.js';
 
 const sha256 = (value) => createHash('sha256').update(String(value), 'utf8').digest('hex');
 const clone = (value) => structuredClone(value);
@@ -121,8 +122,8 @@ export function buildDependencyBoundRequest({ workPackage, packageRecords, maxTo
       trust: 'untrusted_provider_content'
     };
   });
-  const inputBundleHash = sha256(JSON.stringify(sourceManifest));
-  const requestFingerprint = sha256(JSON.stringify({ packageId: packageIdOf(workPackage), originalBrief, brief, acceptanceCriteria: workPackage.acceptanceCriteria ?? [], sourceManifest }));
+  const inputBundleHash = sha256Canonical(sourceManifest);
+  const requestFingerprint = sha256Canonical({ packageId: packageIdOf(workPackage), originalBrief, brief, acceptanceCriteria: workPackage.acceptanceCriteria ?? [], sourceManifest });
   return {
     packageId: packageIdOf(workPackage),
     originalBrief,

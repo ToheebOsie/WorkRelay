@@ -92,6 +92,16 @@
           <span id="execution-mode-pill" class="step">SIMULATION ONLY</span>
         </div>
         <div id="execution-warning" class="notice warn"></div>
+        <div id="sandbox-controls" class="sandbox-controls hidden">
+          <div class="lifecycle-note"><strong>SIMULATED — no provider, wallet, or funds involved</strong><br>Run a complete branch or reset the sandbox. These controls never call a provider or settlement route.<br>Reset clears execution state; it does not restore simulated credits already consumed by quote comparison.</div>
+          <div class="quote-buttons">
+            <button class="secondary sandbox-scenario" data-scenario="success" type="button">Run success branch</button>
+            <button class="secondary sandbox-scenario" data-scenario="revision" type="button">Run revision branch</button>
+            <button class="secondary sandbox-scenario" data-scenario="refund_before_submission" type="button">Refund before submission</button>
+            <button class="secondary sandbox-scenario" data-scenario="unresolved_dispute" type="button">Open unresolved dispute</button>
+            <button class="ghost" id="sandbox-reset" type="button">Reset / replay</button>
+          </div>
+        </div>
         <div id="execution-packages" class="execution-packages"></div>
         <div id="final-report" class="final-report hidden"></div>
       </section>

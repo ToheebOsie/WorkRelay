@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer as createNetServer } from 'node:net';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createPrincipalStore } from '../src/security/principal-store.js';
 import { createSessionStore } from '../src/orchestration/session-store.js';
@@ -13,10 +15,22 @@ const sha256 = (value) => createHash('sha256').update(value, 'utf8').digest('hex
 const asset = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const payTo = '0x1111111111111111111111111111111111111111';
 
+async function findAvailablePort() {
+  const probe = createNetServer();
+  await new Promise((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = probe.address();
+  await new Promise((resolve, reject) => probe.close((error) => error ? reject(error) : resolve()));
+  return port;
+}
+
+
 test('live downstream quote route uses accepted upstream artifacts, creates a new unpaid quote, and rechecks source immutability at approval', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'workrelay-dependency-route-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  const port = 45000 + Math.floor(Math.random() * 1000);
+  const port = await findAvailablePort();
   const principalStorePath = join(dir, 'principals.json');
   const identity = createPrincipalStore({ filePath: principalStorePath }).create();
   const ownerPrincipalId = identity.principal.principalId;
@@ -87,21 +101,56 @@ globalThis.fetch = async (input, init = {}) => {
     X402_ALLOWED_ASSETS_JSON: JSON.stringify({ 'eip155:8453': [asset] }),
     X402_ASSET_DECIMALS: '6'
   };
-  const child = spawn(process.execPath, ['--import', mockFetchPath, 'src/app-server.js'], {
-    cwd: new URL('..', import.meta.url), env, stdio: 'ignore'
+  const projectRoot = fileURLToPath(new URL('..', import.meta.url));
+  const mockFetchSpecifier = pathToFileURL(mockFetchPath).href;
+  const child = spawn(process.execPath, ['--import', mockFetchSpecifier, 'src/app-server.js'], {
+    cwd: projectRoot,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
   });
-  t.after(() => child.kill('SIGTERM'));
+  let childStdout = '';
+  let childStderr = '';
+  let spawnError = null;
+  child.stdout?.setEncoding('utf8').on('data', (chunk) => { childStdout += chunk; });
+  child.stderr?.setEncoding('utf8').on('data', (chunk) => { childStderr += chunk; });
+  child.on('error', (error) => { spawnError = error; });
+  t.after(async () => {
+    if (child.pid && child.exitCode === null && child.signalCode === null) {
+      child.kill();
+      await new Promise((resolve) => {
+        if (child.exitCode !== null || child.signalCode !== null) return resolve();
+        const timeout = setTimeout(resolve, 2000);
+        child.once('exit', () => { clearTimeout(timeout); resolve(); });
+      });
+    }
+  });
   const base = `http://127.0.0.1:${port}`;
   const request = (url, options = {}) => fetch(url, {
     ...options,
     headers: { ...(options.headers || {}), cookie: `workrelay_identity=${identity.token}` }
   });
   let health;
-  for (let i = 0; i < 80; i++) {
-    try { health = await request(`${base}/api/health`); if (health.ok) break; } catch {}
+  let lastReadinessError = 'no health response received';
+  for (let i = 0; i < 100; i++) {
+    if (spawnError || child.exitCode !== null || child.signalCode !== null) break;
+    try {
+      health = await request(`${base}/api/health`);
+      if (health.ok) break;
+      lastReadinessError = `health endpoint returned HTTP ${health.status}`;
+    } catch (error) {
+      lastReadinessError = `${error.code || error.name || 'Error'}: ${error.message}`;
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  assert.equal(health?.status, 200, 'server should become ready');
+  assert.equal(health?.status, 200, [
+    'server should become ready',
+    `last readiness error: ${lastReadinessError}`,
+    `spawn error: ${spawnError?.stack || 'none'}`,
+    `child exit: code=${child.exitCode}, signal=${child.signalCode}`,
+    `child stdout:\n${childStdout || '(empty)'}`,
+    `child stderr:\n${childStderr || '(empty)'}`
+  ].join('\n'));
   for (const path of ['/', '/app.js', '/execution-client.js', '/styles.css']) {
     const assetResponse = await request(`${base}${path}`);
     assert.equal(assetResponse.status, 200, `${path} should be served successfully`);

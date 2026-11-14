@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPrincipalStore } from '../src/security/principal-store.js';
+import { assertPrivateFilePermissions } from '../test-support/assert-private-file.js';
 
 const temp = (fn) => { const dir = mkdtempSync(join(tmpdir(), 'workrelay-principals-')); try { fn(dir); } finally { rmSync(dir, { recursive: true, force: true }); } };
 
@@ -24,7 +25,7 @@ test('never persists raw bearer tokens and persists only token hashes with priva
   const raw = readFileSync(path, 'utf8');
   assert.equal(raw.includes(token), false);
   assert.match(raw, /tokenHash/);
-  assert.equal(statSync(path).mode & 0o777, 0o600);
+  assertPrivateFilePermissions(path);
 }));
 
 test('revoked and malformed capabilities cannot resolve', () => {

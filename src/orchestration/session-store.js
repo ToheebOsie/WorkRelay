@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { securePrivateFileSync } from '../storage/private-file-permissions.js';
 import { randomUUID } from 'node:crypto';
 
 // Bounded session store with optional atomic, single-process file persistence.
@@ -28,6 +29,7 @@ export function createSessionStore({
     const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
     try {
       writeFileSync(temporary, `${JSON.stringify(payload, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+      securePrivateFileSync(temporary);
       renameSync(temporary, target);
     } catch (error) {
       try { unlinkSync(temporary); } catch { /* preserve the original persistence error */ }

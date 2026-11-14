@@ -350,6 +350,22 @@ test('one project journey can plan, quote, simulate, review, report and resume a
   await reviewPackages(roots.map((item) => item.packageId));
   assert.equal(runData.workflow.projectStatus, 'waiting_on_dependencies');
 
+  const downstreamQuote = await request(`${base}/api/demo/downstream/quote`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: created.sessionId, packageId: dependent[0].packageId })
+  });
+  assert.equal(downstreamQuote.status, 200, await downstreamQuote.clone().text());
+  const downstreamQuoteData = await downstreamQuote.json();
+  assert.equal(downstreamQuoteData.quote.status, 'quoted_not_approved');
+  assert.equal(downstreamQuoteData.quote.freshQuote, true);
+
+  const downstreamApproval = await request(`${base}/api/demo/downstream/approve`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: created.sessionId, packageId: dependent[0].packageId })
+  });
+  assert.equal(downstreamApproval.status, 200, await downstreamApproval.clone().text());
+  assert.equal((await downstreamApproval.json()).quote.status, 'approved');
+
   const downstreamRun = await request(`${base}/api/execute`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ sessionId: created.sessionId })

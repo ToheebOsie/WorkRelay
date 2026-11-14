@@ -1,0 +1,33 @@
+WorkRelay delivery manifest — hackathon scope reset
+
+Repository baseline: e67baf8 (source ZIP does not include .git metadata).
+Owner-confirmed state: Steps 1–5 committed; Step 6 accepted and closed; Step 7 Increment 5 accepted on Windows with 220 tests passing and nine inactive publisher candidates validated.
+
+Decision:
+- Freeze the current evidence-quality implementation at Step 7 Increment 5 for hackathon scope.
+- Defer further publisher registry/freshness expansion. The Nigeria fintech candidate pack remains inactive.
+- Next implementation phase is one Rust NEAR testnet escrow contract, one WorkRelay-controlled test FT and local NEAR Sandbox integration tests.
+- Optional browser user-signed testnet mode follows only after local contract tests pass.
+- Sandbox remains fully no-wallet. Live Agent Market discovery/quotes remain unpaid. Live Agent Market payment, mainnet deposits and mainnet commissioning remain excluded.
+
+New scope/implementation documents:
+- docs/HACKATHON_SCOPE_RESET.md
+- docs/NEAR_TESTNET_ESCROW_SPEC.md
+- docs/NEAR_ESCROW_IMPLEMENTATION_TASK.md
+- docs/RUST_GATE_CORRECTION_REPORT.md
+- docs/RUST_INTEGRATION_ASSERTIONS_FIX.md
+- docs/RUST_GATE_FOLLOWUP_REPORT.md
+
+NEAR contract implementation status in this package:
+- Rust source draft is present for `contracts/job-escrow` and `contracts/workrelay-test-token`.
+- Six local NEAR Sandbox integration-test functions are present under `contracts/integration-tests`, including provider acceptance/delivery/review deadlines and expiry after a requested revision. The operator reports host gates, both WASM builds and integration-crate Clippy pass on Rust 1.97.0. The Sandbox functions have not executed because the `near-sandbox` binary download was blocked.
+- Cross-language terms helper and golden vector are included.
+- Current Node suite: 228 passed; escrow terms helper: 4 passed; inactive publisher candidates: 9 validated.
+- The integration suite explicitly consumes all 82 `ExecutionFinalResult` outcomes: 66 expected successes via `into_result()`, 15 expected failures via `is_failure()`, and one failed-token-receipt assertion followed by claim/liability restoration checks. Static Node regression tests guard these counts and require integration-test Clippy with warnings denied.
+- WorkRelay Test Token now contains four host unit tests for metadata/notice and mint preconditions; JobEscrow host tests include failed native-refund callback restoration.
+- The operator's first Rust gate review found missing direct dependencies, Clippy lints and formatting drift. The current source checkpoint adds the missing direct dependencies, aligns NEAR crates at 5.30.1, removes detached native transfer promises through a callback-protected refund ledger, and adds a failed-refund callback unit test.
+- In this ChatGPT environment, Rust formatting, Clippy, compilation, WASM generation, Cargo.lock generation, Rust unit tests and Sandbox integration tests have NOT been executed because Rust/Cargo/NEAR Sandbox tooling and the Rust distribution host are unavailable. Run `npm run format:near-contracts` once in WSL2; it formats the sources and refreshes `SHA256SUMS.txt`. `scripts/check-near-host.sh` is now a non-mutating format check followed by host gates. The full Sandbox script also Clippys the integration-test crate with warnings denied.
+- No testnet wallet adapter or testnet deployment is included. Do not deploy until the local contract acceptance gate passes.
+See `docs/NEAR_ESCROW_IMPLEMENTATION_REPORT.md` and `docs/RUST_GATE_CORRECTION_REPORT.md` for the exact status and WSL2 commands.
+
+Rust follow-up: Sandbox transaction results are now explicitly asserted (not merely `?`-unwrapped), test-token unit tests were added, and the formatter has been separated from the read-only host gate. The operator reports format, host Clippy/unit tests and WASM compilation pass on Rust 1.97.0. The Sandbox suite remains the contract acceptance blocker. The current ZIP does not include Cargo.lock; retain the generated lockfile with the tested source. The package requires the real `near-sandbox` binary before `npm run test:near-contracts` can finish.

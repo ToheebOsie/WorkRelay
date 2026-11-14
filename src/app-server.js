@@ -10,7 +10,7 @@ import { createSessionStore } from './orchestration/session-store.js';
 import { createExecutionBridge, summarizePaymentAudit } from './orchestration/execution-bridge.js';
 import { createExecutionRecordStore } from './storage/execution-record-store.js';
 import { createPrincipalStore } from './security/principal-store.js';
-import { createDemoExecution, runDemoExecution, evaluateDemoDeliverable, reviewDemoDeliverable, buildDemoFinalReport } from './orchestration/demo-execution.js';
+import { approveDemoDownstreamQuote, createDemoExecution, requestDemoDownstreamQuote, runDemoExecution, resetDemoExecution, runDemoScenario, evaluateDemoDeliverable, reviewDemoDeliverable, buildDemoFinalReport } from './orchestration/demo-execution.js';
 import { buildProjectOverview } from './orchestration/project-overview.js';
 import { buildDependencyBoundRequest } from './orchestration/dependency-handoff.js';
 import { createNearA2ACommissioner } from './market/near-a2a-quotes.js';
@@ -468,6 +468,50 @@ const server = createServer(async (req, res) => {
       runDemoExecution(session.execution);
       sessions.set(session.id, session);
       return json(res, 200, { execution: session.execution, report: buildDemoFinalReport(session.execution), workflow: buildProjectOverview(session, { commissioningConfigured: Boolean(commissioner) }), simulationOnly: true });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/demo/reset') {
+      if (!sameOriginIfPresent(req)) return json(res, 403, { error: 'Cross-origin request rejected.' });
+      const input = await bodyJson(req);
+      const session = sessions.get(String(input.sessionId || ''));
+      if (!session?.execution) return json(res, 404, { error: 'Start the demo execution before resetting the sandbox.' });
+      const principal = requestPrincipal(req);
+      if (!principal) return json(res, 401, { error: 'Browser identity is missing or expired. Reload the application.' });
+      if (session.ownerPrincipalId !== principal.principalId) return json(res, 403, { error: 'This project belongs to a different principal.' });
+      if (session.mode !== 'demo') return json(res, 409, { error: 'Sandbox reset is available only for simulation mode.' });
+      resetDemoExecution(session.execution);
+      sessions.set(session.id, session);
+      return json(res, 200, { execution: session.execution, report: buildDemoFinalReport(session.execution), workflow: buildProjectOverview(session, { commissioningConfigured: Boolean(commissioner) }), simulationOnly: true, note: 'Sandbox reset completed. No provider, wallet, or funds were involved.' });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/demo/scenario') {
+      if (!sameOriginIfPresent(req)) return json(res, 403, { error: 'Cross-origin request rejected.' });
+      const input = await bodyJson(req);
+      const session = sessions.get(String(input.sessionId || ''));
+      if (!session?.execution) return json(res, 404, { error: 'Start the demo execution before running a sandbox branch.' });
+      const principal = requestPrincipal(req);
+      if (!principal) return json(res, 401, { error: 'Browser identity is missing or expired. Reload the application.' });
+      if (session.ownerPrincipalId !== principal.principalId) return json(res, 403, { error: 'This project belongs to a different principal.' });
+      if (session.mode !== 'demo') return json(res, 409, { error: 'Sandbox branches are available only for simulation mode.' });
+      runDemoScenario(session.execution, String(input.scenario || ''));
+      sessions.set(session.id, session);
+      return json(res, 200, { execution: session.execution, report: buildDemoFinalReport(session.execution), workflow: buildProjectOverview(session, { commissioningConfigured: Boolean(commissioner) }), simulationOnly: true, note: 'Scenario completed in the labelled no-wallet sandbox. No provider, wallet, or funds were involved.' });
+    }
+    const downstreamDemoRoute = url.pathname.match(/^\/api\/demo\/downstream\/(quote|approve)$/i);
+    if (req.method === 'POST' && downstreamDemoRoute) {
+      if (!sameOriginIfPresent(req)) return json(res, 403, { error: 'Cross-origin request rejected.' });
+      const input = await bodyJson(req);
+      const session = sessions.get(String(input.sessionId || ''));
+      if (!session?.execution) return json(res, 404, { error: 'Start the demo execution before managing downstream sandbox work.' });
+      const principal = requestPrincipal(req);
+      if (!principal) return json(res, 401, { error: 'Browser identity is missing or expired. Reload the application.' });
+      if (session.ownerPrincipalId !== principal.principalId) return json(res, 403, { error: 'This project belongs to a different principal.' });
+      if (session.mode !== 'demo') return json(res, 409, { error: 'Simulated downstream quotes are available only in simulation mode.' });
+      try {
+        const quote = downstreamDemoRoute[1].toLowerCase() === 'quote'
+          ? requestDemoDownstreamQuote(session.execution, String(input.packageId || ''))
+          : approveDemoDownstreamQuote(session.execution, String(input.packageId || ''));
+        sessions.set(session.id, session);
+        return json(res, 200, { quote, execution: session.execution, report: buildDemoFinalReport(session.execution), workflow: buildProjectOverview(session, { commissioningConfigured: Boolean(commissioner) }), simulationOnly: true, note: 'Fresh downstream quote and approval are simulated only. No provider, wallet, or funds were involved.' });
+      } catch (error) { return json(res, 409, { error: error.message }); }
     }
     if (req.method === 'POST' && url.pathname === '/api/evaluate') {
       if (!sameOriginIfPresent(req)) return json(res, 403, { error: 'Cross-origin request rejected.' });
