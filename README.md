@@ -2,7 +2,7 @@
 
 **An evidence-backed research procurement workflow.** A buyer describes one research decision. WorkRelay splits it into work packages, compares provider quotes, passes accepted upstream results to dependent packages with a fresh quote and a separate approval, and shows claim-by-claim evidence that a human reviewer can inspect before accepting anything.
 
-**Live demo:** workrelay-production.up.railway.app
+**Live demo:** _add the deployed URL here_
 
 > The demo is a **simulation**. No wallet, account, provider or real money is involved. Every simulated item carries the label `SIMULATED — no provider, wallet, or funds involved`.
 
@@ -10,8 +10,8 @@
 
 1. Open the app and choose **Build project plan** on the sample research brief.
 2. **Compare quotes** and inspect the terms, budget cap and provider ranking.
-3. **Run simulated project**, then open the **Evidence packet** and **Structural evaluation** panels. Each check shows what it verified and what it does *not* prove. One source is deliberately bad, so a check fails visibly.
-4. Accept an upstream deliverable. The dependent package is built from the exact accepted content and needs its own fresh quote and approval.
+3. **Run simulated project**, then open the **Evidence packet** and **Structural evaluation** panels. Each check shows what it verified and what it does *not* prove. One source is deliberately bad, so a check fails visibly and accepting that package needs a documented override.
+4. Accept an upstream deliverable (the deliberately bad source means you will be asked to record an override reason). The dependent package is built from the exact accepted content and needs its own fresh quote and approval.
 5. Run the four branches: success, revision request, refund before submission, and unresolved dispute. Reset and replay at any time.
 6. Download the project report (`.md`).
 
@@ -29,6 +29,8 @@
 - Deliverables carry a structured evidence packet: claims, sources (with retrieval time and content hash), claim–source links and stated limitations.
 - Checks are deterministic and typed (schema and hash integrity, safe source capture, excerpt match, freshness, independent-source counts, reproducible arithmetic, unsupported or contradicted claims). Results are `complete`, `incomplete`, `needs human review` or `check failed`.
 - There is **no truth score**. A passing check means only that the named check passed. Whether work is accepted is a separate, explicit human decision.
+- **Evidence gates acceptance.** A deliverable can be accepted without ceremony only when both the evidence verification and the evidence-quality policy report `complete`. Otherwise acceptance is refused unless the reviewer records a written override (at least 20 characters). The override is bound to the exact packet digest and is shown on the package, in the ledger, in dependent packages' handoff and in the downloaded report.
+- **Missing evidence is never a pass.** A source with no captured snapshot, or a verification run with no raw artifact, is reported `incomplete`.
 
 Details: [evidence pipeline](docs/EVIDENCE_PIPELINE.md), [evidence quality policy](docs/EVIDENCE_QUALITY_POLICY.md), [sandbox and handoff](docs/SANDBOX_AND_HANDOFF.md).
 
@@ -63,6 +65,7 @@ Run the simulation as a **single Node.js process** behind HTTPS with a persisten
 
 - **Live payment is intentionally off.** The app's payment allowlist covers EVM networks, while the current Agent Market hiring guide documents a NEAR-mainnet transfer profile; the two are not reconciled. The historical payment recipient is unverified, and dispatch needs an atomic duplicate-call guard before any live spending. See [payment safety](docs/X402_PAYMENT_AUTHORIZATION.md).
 - **No on-chain settlement is included in this submission.** A NEAR escrow contract was explored but is not part of this repository.
+- **Source capture is not wired into the app yet.** `captureSource` (HTTPS only, public addresses only, connection pinned to the validated address, redirect, size and time limits) is tested but no route calls it, and the demo packet is a fixed fixture. The evidence layer is not yet the live workflow.
 - **Evidence checks are structural, not factual.** They show traceability and completeness; they do not establish that a claim is true.
 - **Reviewer identity is declared, not authenticated**, and review state is not yet persisted per account.
 - **Single instance only.** Sessions and credits use local JSON files and must not be shared across replicas.
@@ -76,6 +79,10 @@ Run the simulation as a **single Node.js process** behind HTTPS with a persisten
 - [Schema contracts](docs/SCHEMA_CONTRACTS.md) · [Evidence pipeline](docs/EVIDENCE_PIPELINE.md) · [Evidence quality policy](docs/EVIDENCE_QUALITY_POLICY.md) · [Freshness calibration](docs/EVIDENCE_FRESHNESS_CALIBRATION.md)
 - [Sandbox and handoff](docs/SANDBOX_AND_HANDOFF.md) · [Payment safety](docs/X402_PAYMENT_AUTHORIZATION.md)
 
+## License
+
+[MIT](LICENSE). The package keeps `"private": true` only to prevent an accidental `npm publish`.
+
 ## Status
 
-Hackathon MVP. This repository is private (`private: true`). It is not a custody service, a payment processor or a guarantee of provider performance.
+Hackathon MVP. It is not a custody service, a payment processor or a guarantee of provider performance.

@@ -8,10 +8,16 @@ const esc = (value = '') => String(value).replace(/[&<>"']/g, (character) => ({
 }[character]));
 const metric = (label, value) => `<div class="metric"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div></div>`;
 
+function scrollToSection(element) {
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+  element.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+}
+
 let currentSession = null;
 let currentMode = 'demo';
 let currentDisplayCurrency = 'DEMO USD';
 let currentProject = null;
+let sandboxBusy = false;
 
 const identityReady = fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' }).then(async (response) => {
   if (!response.ok) throw new Error('Unable to establish browser identity. Reload the page to retry.');
@@ -43,7 +49,7 @@ async function refreshCredits() {
     if (currentMode === 'demo') {
       $('#budget').max = Math.min(data.balance.perProjectLimit, data.balance.perIp.remaining);
       if (Number($('#budget').value) > Number($('#budget').max)) $('#budget').value = $('#budget').max;
-      $('#budget-note').textContent = `No sign-up or wallet required. Up to $${data.balance.perProjectLimit.toFixed(2)} per project, within your IP allowance. Simulated recommendations consume credits; unused reservation is released.`;
+      $('#budget-note').textContent = `Demo credits are simulated access limits, not money. Up to $${data.balance.perProjectLimit.toFixed(2)} per project, within your IP allowance. Simulated quote recommendations use credits; unused reservations are returned.`;
     }
   } catch {
     $('#ip-balance').textContent = 'Unavailable';
@@ -69,8 +75,8 @@ $('#mode').addEventListener('change', () => {
   $('#budget').max = selectedMode === 'demo' ? '5' : '1000000';
   $('#budget').value = selectedMode === 'demo' ? '5' : '10';
   const nextProjectNote = selectedMode === 'demo'
-    ? 'Demo credits are free, simulated and IP-capped. They are not money or a payment method.'
-    : 'Live mode discovers marketplace agents and requests unpaid quotes only. No provider is commissioned and no funds are spent.';
+    ? 'Demo mode uses free simulated credits. They are not money or a payment method, and usage is limited by your IP allowance.'
+    : 'Live mode searches the Agent Market and requests unpaid quotes only. No provider is hired and no money is spent.';
   $('#budget-note').textContent = currentSession
     ? `This selection applies to your next project. The open project remains ${currentMode === 'demo' ? 'SIMULATED' : 'LIVE · UNPAID QUOTES ONLY'}. ${nextProjectNote}`
     : nextProjectNote;
@@ -104,7 +110,7 @@ $('#task-form').addEventListener('submit', async (event) => {
     rememberProject(currentSession);
     hydrateProject(data);
     updateCreditBalance(data.credits?.balance);
-    $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollToSection($('#results'));
   } catch (error) {
     $('#notice').className = 'notice warn';
     $('#notice').textContent = error.message;
@@ -132,8 +138,8 @@ function hydrateProject(project, { restored = false } = {}) {
   $('#currency-label').textContent = currentDisplayCurrency;
   $('#budget').max = currentMode === 'demo' ? '5' : '1000000';
   $('#budget-note').textContent = currentMode === 'demo'
-    ? 'Demo credits are free, simulated and IP-capped. They are not money or a payment method.'
-    : 'Live mode discovers marketplace agents and requests unpaid quotes only. No provider is commissioned and no funds are spent.';
+    ? 'Demo mode uses free simulated credits. They are not money or a payment method, and usage is limited by your IP allowance.'
+    : 'Live mode searches the Agent Market and requests unpaid quotes only. No provider is hired and no money is spent.';
   if (project.plan?.objective) $('#objective').value = project.plan.objective;
   if (project.plan?.budget?.amount) $('#budget').value = project.plan.budget.amount;
   $('#results').classList.remove('hidden');
@@ -331,7 +337,7 @@ $('#execute-button').addEventListener('click', async () => {
     currentProject = { ...currentProject, execution: data.execution, report: data.report, workflow: data.workflow };
     renderExecution(data);
     $('#execution').classList.remove('hidden');
-    $('#execution').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollToSection($('#execution'));
   } catch (error) {
     $('#execution').classList.remove('hidden');
     $('#execution-warning').textContent = error.message;
@@ -352,6 +358,61 @@ async function executionAction(path, packageId, extra = {}) {
   renderExecution(data);
 }
 
+function evidenceValue(value, fallback = 'Not recorded') {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (Array.isArray(value)) return value.length ? value.map((item) => String(item)).join(', ') : fallback;
+  return String(value);
+}
+
+function evidenceFact(label, value) {
+  return `<div class="evidence-fact"><dt>${esc(label)}</dt><dd>${esc(evidenceValue(value))}</dd></div>`;
+}
+
+function evidenceDisclosure(label, count, content) {
+  if (!count) return '';
+  const itemWord = count === 1 ? 'item' : 'items';
+  return `<details class="evidence-disclosure"><summary><span>${esc(label)}</span><span class="evidence-count">${count} ${itemWord}</span></summary><div class="evidence-disclosure-content">${content}</div></details>`;
+}
+
+function renderSourceAssessment(source = {}) {
+  const captureStatus = evidenceValue(source.captureStatus, 'capture not recorded').replaceAll('_', ' ');
+  const freshnessStatus = evidenceValue(source.freshnessStatus, 'not assessed').replaceAll('_', ' ');
+  const facts = [
+    evidenceFact('Domain', source.domain || 'Invalid host'),
+    evidenceFact('Capture status', captureStatus),
+    evidenceFact('Freshness', freshnessStatus),
+    evidenceFact('Authority tier', source.authorityTier),
+    evidenceFact('Publisher group', source.publisherGroup || 'Unregistered'),
+    evidenceFact('Authority scope', source.authorityScope || []),
+    evidenceFact('Permitted claims', source.permittedClaimTypes || []),
+    evidenceFact('Authority registry status', source.authorityRegistryStatus || 'Unregistered'),
+    evidenceFact('Registry valid until', source.authorityRegistryValidUntil),
+    evidenceFact('Maximum retrieval age', `${evidenceValue(source.maxRetrievalAgeDays, 'Not configured')} days`),
+    ...(source.attributionSignals || []).map((signal) => evidenceFact(`Attribution signal — ${evidenceValue(signal.type)}`, signal.label))
+  ];
+  return `<details class="evidence-item"><summary><span class="evidence-item-title">Source ${esc(evidenceValue(source.sourceId, 'unknown'))}</span><span class="evidence-item-status">${esc(captureStatus)} · freshness ${esc(freshnessStatus)}</span></summary><dl class="evidence-facts">${facts.join('')}</dl></details>`;
+}
+
+function renderClaimAssessment(claim = {}) {
+  const corroboration = evidenceValue(claim.corroborationStatus, 'not assessed').replaceAll('_', ' ');
+  const conflictStatus = evidenceValue(claim.conflictAssessment?.status, 'none').replaceAll('_', ' ');
+  const lawStatus = evidenceValue(claim.regulatoryCurrentStatus?.status, 'not applicable').replaceAll('_', ' ');
+  const derivativePairs = (claim.possibleDerivativePairs || []).map((pair) => `${(pair.sourceIds || []).join(' ↔ ')} (${evidenceValue(pair.similarity, 'similarity not recorded')})`);
+  const commonOriginPairs = (claim.possibleCommonOriginPairs || []).map((pair) => `${(pair.sourceIds || []).join(' ↔ ')} (${evidenceValue(pair.attributionLabel, 'label not recorded')})`);
+  const facts = [
+    evidenceFact('Corroboration', corroboration),
+    evidenceFact('Conflict assessment', conflictStatus),
+    evidenceFact('Current-law status', lawStatus),
+    evidenceFact('Supporting sources:', claim.supportingSourceIds || []),
+    evidenceFact('Registered publisher groups', claim.publisherGroups || []),
+    ...(derivativePairs.length ? [evidenceFact('possible shared/derivative text', derivativePairs)] : []),
+    ...(commonOriginPairs.length ? [evidenceFact('repeated attribution/origin label', commonOriginPairs)] : []),
+    ...(claim.conflictAssessment?.status === 'adjudicated' ? [evidenceFact('Conflict reviewer', claim.conflictAssessment.reviewerId || 'recorded')] : [])
+  ];
+  const summary = `Corroboration: ${corroboration} · conflict: ${conflictStatus} · current-law status: ${lawStatus}`;
+  return `<details class="evidence-item"><summary><span class="evidence-item-title">Claim ${esc(evidenceValue(claim.claimId, 'unknown'))}</span><span class="evidence-item-status">${esc(summary)}</span></summary><dl class="evidence-facts">${facts.join('')}</dl></details>`;
+}
+
 function renderExecution(data) {
   const execution = data.execution;
   if (!execution) return;
@@ -360,21 +421,43 @@ function renderExecution(data) {
   const sandboxControls = $('#sandbox-controls');
   sandboxControls.classList.toggle('hidden', execution.mode !== 'simulation_only');
   sandboxControls.querySelectorAll('.sandbox-scenario').forEach((button) => {
-    button.disabled = false;
-    button.textContent = button.dataset.scenario === execution.sandbox?.scenario ? `Run ${button.dataset.scenario.replaceAll('_', ' ')} again` : button.textContent;
+    const label = button.dataset.label || button.textContent;
+    button.dataset.label = label;
+    button.disabled = sandboxBusy;
+    button.textContent = button.dataset.scenario === execution.sandbox?.scenario ? `${label} again` : label;
+    button.onclick = () => runSandboxScenario(button.dataset.scenario, button);
   });
+  const resetButton = sandboxControls.querySelector('#sandbox-reset');
+  resetButton.disabled = sandboxBusy;
+  resetButton.onclick = () => resetSandbox(resetButton);
   $('#execution-packages').innerHTML = (execution.packages || []).map((workPackage) => {
     const evaluation = workPackage.evaluation || { status: 'not_evaluated', results: [] };
     const evaluationHtml = evaluation.status === 'not_evaluated' ? '' : `<div class="evaluation"><strong>Structural evaluation: ${esc(String(evaluation.status).replaceAll('_', ' '))}</strong><p>${esc(evaluation.limitation || 'Structural checks only; factual accuracy and source validity have not been verified.')}</p>${(evaluation.results || []).map((result) => `<div class="check-row"><span>${result.passed ? '✓' : '×'} ${esc(result.criterion)}</span><small>${esc(result.evidence)}</small></div>`).join('')}</div>`;
-    const evidence = workPackage.evidencePacket?.verification;
-    const evidenceHtml = evidence ? `<div class="evaluation"><strong>Evidence packet: ${esc(evidence.status)}</strong><p>${esc(evidence.limitation || 'Typed evidence checks only; factual truth is not established.')}</p>${(evidence.checks || []).map((check) => `<div class="check-row"><span>${esc(check.status)} · ${esc(check.type)}</span><small>${esc(check.detail)}</small></div>`).join('')}</div>` : '';
-    const quality = workPackage.evidencePacket?.qualityEvaluation;
-    const qualityHtml = quality ? `<div class="evaluation evidence-quality"><strong>Evidence quality policy: ${esc(quality.status.replaceAll('_', ' '))}</strong><p>${esc(quality.limitation || 'Source authority, freshness and corroboration checks are policy signals; human review remains distinct from factual truth.')}</p><div class="check-row"><span>Human review · ${esc(quality.reviewStatus.replaceAll('_', ' '))}</span><small>Packet-bound review commitment: ${esc(quality.reviewDigest || 'not recorded')}</small></div>${(quality.checks || []).map((check) => `<div class="check-row"><span>${esc(check.status)} · ${esc(check.type)}</span><small>${esc(check.detail)}</small></div>`).join('')}${(quality.sourceAssessments || []).map((source) => `<div class="check-row"><span>Source ${esc(source.sourceId)} · ${esc(source.captureStatus)} · freshness ${esc(source.freshnessStatus || 'not assessed')}</span><small>${esc(source.domain || 'invalid host')} · authority ${esc(source.authorityTier)} · publisher group ${esc(source.publisherGroup || 'unregistered')} · scope ${esc((source.authorityScope || []).join('; ') || 'unregistered')} · permitted claims ${esc((source.permittedClaimTypes || []).join(', ') || 'none')} · registry ${esc(source.authorityRegistryStatus || 'unregistered')} · valid until ${esc(source.authorityRegistryValidUntil || 'not recorded')} · retrieval window ${esc(source.maxRetrievalAgeDays ?? 'not configured')} days${(source.attributionSignals || []).map((signal) => ` · attribution ${esc(signal.type)}: ${esc(signal.label)}`).join('')}</small></div>`).join('')}${(quality.claimAssessments || []).map((claim) => `<div class="check-row"><span>Claim ${esc(claim.claimId)} · corroboration ${esc(claim.corroborationStatus)} · conflict ${esc(claim.conflictAssessment?.status || 'none')} · current-law status ${esc(claim.regulatoryCurrentStatus?.status || 'not applicable')}</span><small>Supporting sources: ${esc((claim.supportingSourceIds || []).join(', ') || 'none')} · registered publisher groups: ${esc((claim.publisherGroups || []).join(', ') || 'none')}${(claim.possibleDerivativePairs || []).map((pair) => ` · possible shared/derivative text: ${esc(pair.sourceIds.join(' ↔ '))} (${esc(pair.similarity)})`).join('')}${(claim.possibleCommonOriginPairs || []).map((pair) => ` · repeated attribution/origin label: ${esc(pair.sourceIds.join(' ↔ '))} (${esc(pair.attributionLabel)})`).join('')}${claim.conflictAssessment?.status === 'adjudicated' ? ` · conflict reviewer: ${esc(claim.conflictAssessment.reviewerId || 'recorded')}` : ''}</small></div>`).join('')}</div>` : '';
+  const evidence = workPackage.evidencePacket?.verification;
+  const verificationChecks = Array.isArray(evidence?.checks) ? evidence.checks : [];
+  const verificationRows = verificationChecks.map((check) => `<div class="check-row"><span>${esc(check.status)} · ${esc(check.type)}</span><small>${esc(check.detail)}</small></div>`).join('');
+  const evidenceHtml = evidence ? `<section class="evaluation evidence-panel" aria-label="Evidence packet"><h3 class="evidence-heading">Evidence packet: ${esc(evidenceValue(evidence.status, 'unknown').replaceAll('_', ' '))}</h3><p>${esc(evidence.limitation || 'Typed evidence checks only; factual truth is not established.')}</p>${evidenceDisclosure('Verification checks', verificationChecks.length, verificationRows)}</section>` : '';
+  const quality = workPackage.evidencePacket?.qualityEvaluation;
+    const qualityStatus = evidenceValue(quality?.status, 'unknown').replaceAll('_', ' ');
+    const qualityReviewStatus = evidenceValue(quality?.reviewStatus, 'unknown').replaceAll('_', ' ');
+    const evidenceGatePassed = evidence?.status === 'complete' && quality?.status === 'complete';
+    const qualityChecks = Array.isArray(quality?.checks) ? quality.checks : [];
+    const sourceAssessments = Array.isArray(quality?.sourceAssessments) ? quality.sourceAssessments : [];
+    const claimAssessments = Array.isArray(quality?.claimAssessments) ? quality.claimAssessments : [];
+  const qualityCheckRows = qualityChecks.map((check) => `<div class="check-row"><span>${esc(check.status)} · ${esc(check.type)}</span><small>${esc(check.detail)}</small></div>`).join('');
+  const qualityDetails = evidenceDisclosure('Policy checks', qualityChecks.length, qualityCheckRows)
+    + evidenceDisclosure('Source assessments', sourceAssessments.length, sourceAssessments.map(renderSourceAssessment).join(''))
+    + evidenceDisclosure('Claim assessments', claimAssessments.length, claimAssessments.map(renderClaimAssessment).join(''));
+  const qualityHtml = quality ? `<section class="evaluation evidence-quality" aria-label="Evidence quality policy"><h3 class="evidence-heading">Evidence quality policy: ${esc(qualityStatus)}</h3><p>${esc(quality.limitation || 'Source authority, freshness and corroboration checks are policy signals; human review remains distinct from factual truth.')}</p><div class="check-row evidence-review-row"><span>Human review · ${esc(qualityReviewStatus)}</span><small>Packet-bound review commitment: ${esc(evidenceValue(quality.reviewDigest))}</small></div>${qualityDetails}</section>` : '';
     const actions = workPackage.status === 'delivered_pending_evaluation'
       ? `<button class="secondary action-evaluate" data-id="${esc(workPackage.packageId)}">Run structural checks</button>`
       : workPackage.status === 'awaiting_human_review'
-        ? `<div class="review-actions"><button class="secondary action-review" data-id="${esc(workPackage.packageId)}" data-decision="accept">Accept deliverable</button><button class="ghost action-review" data-id="${esc(workPackage.packageId)}" data-decision="request_revision">Request revision</button></div>`
+        ? `${evidenceGatePassed ? '' : `<div class="notice warn"><strong>Evidence gate not passed.</strong> Verification: ${esc(evidence?.status || 'missing')} · quality policy: ${esc(quality?.status || 'missing')}. Accepting requires a written override that is recorded on the package, in the ledger and in the report.</div>`}<div class="review-actions"><button class="secondary action-review" data-id="${esc(workPackage.packageId)}" data-decision="accept" data-evidence-gate="${evidenceGatePassed ? 'passed' : 'blocked'}">${evidenceGatePassed ? 'Accept deliverable' : 'Accept with documented evidence override…'}</button><button class="ghost action-review" data-id="${esc(workPackage.packageId)}" data-decision="request_revision">Request revision</button></div>`
         : '';
+    const gateRecord = workPackage.acceptance?.evidenceGate;
+    const gateRecordHtml = gateRecord?.status === 'overridden'
+      ? `<div class="notice warn"><strong>Accepted with an evidence override.</strong> Verification was ${esc(gateRecord.verificationStatus)} and quality policy was ${esc(gateRecord.qualityStatus)}. Reason: ${esc(gateRecord.override?.reason || 'not recorded')} (recorded by ${esc(gateRecord.override?.reviewer?.kind || 'unknown')} ${esc(gateRecord.override?.reviewer?.id || '')}; packet ${esc(gateRecord.packetDigest || 'not recorded')})</div>`
+      : gateRecord?.status === 'passed' ? `<div class="lifecycle-note">Evidence gate passed before acceptance (packet ${esc(gateRecord.packetDigest || 'not recorded')}).</div>` : '';
     const downstreamActions = workPackage.status === 'queued_waiting_for_downstream_quote'
       ? `<button class="secondary action-downstream-quote" data-id="${esc(workPackage.packageId)}">Request fresh simulated downstream quote</button>`
       : workPackage.status === 'queued_waiting_for_downstream_approval'
@@ -384,13 +467,12 @@ function renderExecution(data) {
       ? `<div class="notice">Waiting for upstream human acceptance: ${esc((workPackage.waitingOn || workPackage.dependsOn || []).join(', '))}. A dependent package cannot start based on delivery alone.</div>` : '';
     const inputNote = (workPackage.dependencyInputs || []).length
       ? `<div class="lifecycle-note">Accepted upstream inputs consumed: ${(workPackage.dependencyInputs || []).map((source) => `${esc(source.packageId)} · SHA-256 ${esc(source.contentHash)}`).join(' | ')}. New simulated request fingerprint: ${esc(workPackage.dependencyHandoff?.requestFingerprint || 'not recorded')}.</div>` : '';
-    return `<article class="execution-card"><header><div><span class="package-index">${esc(workPackage.packageId)}</span><h3>${esc(workPackage.title)}</h3><p>${esc(workPackage.simulationLabel || workPackage.providerName || workPackage.provider || 'Provider')} · ${esc(workPackage.taskId || 'Task ID unavailable')}</p></div><span class="status">${esc(String(workPackage.status || 'unknown').replaceAll('_', ' ').toUpperCase())}</span></header>${waiting}<pre>${esc(workPackage.deliverable || 'Waiting for eligible upstream inputs…')}</pre>${inputNote}${downstreamActions}${evidenceHtml}${qualityHtml}${evaluationHtml}${actions}</article>`;
+    return `<article class="execution-card"><header><div><span class="package-index">${esc(workPackage.packageId)}</span><h3>${esc(workPackage.title)}</h3><p>${esc(workPackage.simulationLabel || workPackage.providerName || workPackage.provider || 'Provider')} · ${esc(workPackage.taskId || 'Task ID unavailable')}</p></div><span class="status">${esc(String(workPackage.status || 'unknown').replaceAll('_', ' ').toUpperCase())}</span></header>${waiting}<pre>${esc(workPackage.deliverable || 'Waiting for eligible upstream inputs…')}</pre>${inputNote}${downstreamActions}${evidenceHtml}${qualityHtml}${evaluationHtml}${gateRecordHtml}${actions}</article>`;
   }).join('');
   renderWorkflow(data.workflow || currentProject?.workflow);
   const report = data.report || currentProject?.report;
   if (report) renderFinalReport(report);
-  sandboxControls.querySelectorAll('.sandbox-scenario').forEach((button) => button.addEventListener('click', () => runSandboxScenario(button.dataset.scenario, button)));
-  sandboxControls.querySelector('#sandbox-reset').onclick = () => resetSandbox(sandboxControls.querySelector('#sandbox-reset'));
+
   document.querySelectorAll('.action-downstream-quote').forEach((button) => button.addEventListener('click', () => manageDownstreamQuote('quote', button)));
   document.querySelectorAll('.action-downstream-approve').forEach((button) => button.addEventListener('click', () => manageDownstreamQuote('approve', button)));
 
@@ -416,6 +498,13 @@ function renderExecution(data) {
   $('#execution-packages').querySelectorAll('.action-review').forEach((button) => {
     button.addEventListener('click', async () => {
       const decision = button.dataset.decision;
+      let evidenceOverrideReason;
+      if (decision === 'accept' && button.dataset.evidenceGate === 'blocked') {
+        const reason = window.prompt('The evidence checks have not all passed. To accept anyway, record why (at least 20 characters). This is stored with the acceptance and shown in the report.');
+        if (reason === null) return;
+        if (reason.trim().length < 20) { $('#execution-warning').textContent = 'The override reason must be at least 20 characters. Nothing was accepted.'; return; }
+        evidenceOverrideReason = reason.trim();
+      }
       if (decision === 'accept') {
         const confirmed = window.confirm('Accept this simulated deliverable as the project owner? This records human acceptance only. It does NOT verify factual accuracy, settle payment, or authorize any payment.');
         if (!confirmed) return;
@@ -427,7 +516,7 @@ function renderExecution(data) {
         ? 'Recording explicit human acceptance. Payment settlement remains separate.'
         : 'Recording your request for revision. No payment state is changed.';
       try {
-        await executionAction('/api/review', button.dataset.id, { decision });
+        await executionAction('/api/review', button.dataset.id, evidenceOverrideReason ? { decision, evidenceOverrideReason } : { decision });
       } catch (error) {
         $('#execution-warning').textContent = error.message;
         button.disabled = false;
@@ -449,18 +538,38 @@ async function manageDownstreamQuote(action, button) {
   } catch (error) { $('#execution-warning').textContent = error.message; button.disabled = false; }
 }
 
+function setSandboxControlsDisabled(disabled) {
+  $('#sandbox-controls').querySelectorAll('.sandbox-scenario, #sandbox-reset').forEach((button) => {
+    button.disabled = disabled;
+  });
+}
+
 async function runSandboxScenario(scenario, button) {
+  if (sandboxBusy) return;
+  sandboxBusy = true;
+  setSandboxControlsDisabled(true);
+  const originalLabel = button.dataset.label || button.textContent;
   button.disabled = true;
+  button.textContent = 'Running simulated branch…';
   try {
     const response = await apiFetch('/api/demo/scenario', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: currentSession, scenario }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Sandbox scenario failed');
     currentProject = { ...currentProject, execution: data.execution, report: data.report, workflow: data.workflow };
     renderExecution(data);
-  } catch (error) { $('#execution-warning').textContent = error.message; }
+  } catch (error) {
+    $('#execution-warning').textContent = error.message;
+    button.textContent = originalLabel;
+  } finally {
+    sandboxBusy = false;
+    setSandboxControlsDisabled(false);
+  }
 }
 
 async function resetSandbox(button) {
+  if (sandboxBusy) return;
+  sandboxBusy = true;
+  setSandboxControlsDisabled(true);
   button.disabled = true;
   try {
     const response = await apiFetch('/api/demo/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: currentSession }) });
@@ -468,7 +577,12 @@ async function resetSandbox(button) {
     if (!response.ok) throw new Error(data.error || 'Sandbox reset failed');
     currentProject = { ...currentProject, execution: data.execution, report: data.report, workflow: data.workflow };
     renderExecution(data);
-  } catch (error) { $('#execution-warning').textContent = error.message; }
+  } catch (error) {
+    $('#execution-warning').textContent = error.message;
+  } finally {
+    sandboxBusy = false;
+    setSandboxControlsDisabled(false);
+  }
 }
 
 function renderWorkflow(workflow) {
@@ -485,7 +599,7 @@ function renderFinalReport(report) {
   $('#final-report').classList.remove('hidden');
   $('#final-report').innerHTML = `<div class="proposal-head"><div><div class="eyebrow">05 / CONSOLIDATED HANDOFF</div><h3>${esc(report.title || 'Project report')}</h3><div class="proposal-id">Execution ${esc(report.executionId || '')}</div></div><span class="status">${esc(String(report.status || 'available').replaceAll('_', ' ').toUpperCase())}</span></div>
     <p>${esc(report.disclosure || 'Report disclosure unavailable.')}</p>
-    <div class="summary-grid">${metric('HUMAN-ACCEPTED PACKAGES', report.completedPackages ?? 0)}${metric('TOTAL PACKAGES', report.totalPackages ?? 0)}${metric('REAL MONEY SPENT', '$0.00')}</div>
+    <div class="summary-grid">${metric('HUMAN-ACCEPTED PACKAGES', report.completedPackages ?? 0)}${metric('EVIDENCE OVERRIDES', report.evidenceOverrides ?? 0)}${metric('TOTAL PACKAGES', report.totalPackages ?? 0)}${metric('REAL MONEY SPENT', '$0.00')}</div>
     <div class="report-disclosure">${esc(report.payment?.note || 'No payment settlement is inferred from this simulated workflow.')}</div>
     <button id="download-report" class="secondary" type="button">Download project report (.md)</button>`;
   $('#download-report').addEventListener('click', () => downloadReport(report));
@@ -500,6 +614,7 @@ function downloadReport(report) {
     `Execution ID: ${report.executionId || 'unknown'}`,
     `Status: ${report.status || 'unknown'}`,
     `Human-accepted packages: ${report.completedPackages ?? 0}/${report.totalPackages ?? 0}`,
+    `Accepted with an evidence override: ${report.evidenceOverrides ?? 0}`,
     '',
     ...((report.sections || []).flatMap((section) => [
       `## ${section.title || 'Work package'}`,
@@ -507,6 +622,8 @@ function downloadReport(report) {
       `Status: ${section.status || 'unknown'}`,
       `Content SHA-256: ${section.contentHash || 'not recorded'}`,
       `Evaluation: ${section.evaluation?.status || 'not evaluated'}`,
+      `Evidence gate: verification ${section.evidenceGate?.verificationStatus || 'missing'}; quality policy ${section.evidenceGate?.qualityStatus || 'missing'}`,
+      ...(section.acceptance?.evidenceGate?.status === 'overridden' ? [`**Accepted with evidence override:** ${section.acceptance.evidenceGate.override?.reason || 'reason not recorded'} (${section.acceptance.evidenceGate.override?.reviewer?.kind || 'unknown'} ${section.acceptance.evidenceGate.override?.reviewer?.id || ''})`] : []),
       '',
       section.deliverable || 'No deliverable was recorded.',
       ''

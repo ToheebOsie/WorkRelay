@@ -6,6 +6,41 @@ import { sha256Canonical } from '../contracts/schema.js';
 const now = () => new Date().toISOString();
 const clone = (value) => structuredClone(value);
 const SIMULATION_LABEL = 'SIMULATED — no provider, wallet, or funds involved';
+const MIN_OVERRIDE_REASON = 20;
+const MAX_OVERRIDE_REASON = 1000;
+// Used only by the scripted "success" branch, which has no human in the loop.
+const SUCCESS_BRANCH_OVERRIDE = Object.freeze({
+  reviewer: Object.freeze({ kind: 'system', id: 'workrelay-demo-success-branch' }),
+  reason: 'Scripted demo branch: the deliberately failing source fixture is overridden so the dependency handoff can be demonstrated. This is not a real review.'
+});
+
+/**
+ * Evidence gate for acceptance. Acceptance is allowed without an override only
+ * when BOTH the deterministic evidence verification and the evidence-quality
+ * policy report `complete` for the exact packet attached to the deliverable.
+ */
+export function assessEvidenceGate(pkg) {
+  const packet = pkg?.evidencePacket ?? null;
+  const verificationStatus = packet?.verification?.status ?? 'missing';
+  const qualityStatus = packet?.qualityEvaluation?.status ?? 'missing';
+  return {
+    passed: verificationStatus === 'complete' && qualityStatus === 'complete',
+    verificationStatus,
+    qualityStatus,
+    packetDigest: packet?.digest ?? null
+  };
+}
+
+function normalizeEvidenceOverride(value, gate) {
+  const reason = typeof value?.reason === 'string' ? value.reason.trim() : '';
+  const reviewer = value?.reviewer;
+  const blocked = `Evidence checks have not all passed (verification: ${gate.verificationStatus}; quality policy: ${gate.qualityStatus}). Acceptance requires an explicit evidence override with a written reason.`;
+  if (!value || typeof value !== 'object') throw new Error(blocked);
+  if (reason.length < MIN_OVERRIDE_REASON) throw new Error(`${blocked} The reason must be at least ${MIN_OVERRIDE_REASON} characters.`);
+  if (reason.length > MAX_OVERRIDE_REASON) throw new Error(`The override reason must be at most ${MAX_OVERRIDE_REASON} characters.`);
+  if (!reviewer || typeof reviewer.kind !== 'string' || !reviewer.kind.trim() || typeof reviewer.id !== 'string' || !reviewer.id.trim()) throw new Error('An evidence override must identify who recorded it.');
+  return { reason, reviewer: { kind: reviewer.kind.trim(), id: reviewer.id.trim() } };
+}
 
 function makeSampleDeliverable(pkg, providerName, dependencyHandoff = null) {
   const brief = String(pkg.brief || pkg.title || 'Project task');
@@ -279,12 +314,17 @@ export function runDemoScenario(execution, scenario) {
     }
     for (const pkg of execution.packages) {
       if (pkg.status === 'delivered_pending_evaluation') { evaluateDemoDeliverable(execution, pkg.packageId); progress = true; }
-      if (pkg.status === 'awaiting_human_review') { reviewDemoDeliverable(execution, pkg.packageId, 'accept'); progress = true; }
+      if (pkg.status === 'awaiting_human_review') {
+        reviewDemoDeliverable(execution, pkg.packageId, 'accept', assessEvidenceGate(pkg).passed ? {} : { evidenceOverride: SUCCESS_BRANCH_OVERRIDE });
+        progress = true;
+      }
     }
   }
-  execution.status = execution.packages.every((pkg) => pkg.status === 'accepted') ? 'success_all_packages_accepted' : execution.status;
+  const overrides = execution.packages.filter((pkg) => pkg.acceptance?.evidenceGate?.status === 'overridden').length;
+  if (execution.packages.every((pkg) => pkg.status === 'accepted')) execution.status = overrides ? 'success_with_evidence_overrides' : 'success_all_packages_accepted';
   execution.sandbox.status = 'completed';
-  execution.ledger.push({ at: now(), event: 'demo_success_branch_completed', details: { simulationLabel: SIMULATION_LABEL, paymentStatus: 'not_applicable_simulation' } });
+  execution.sandbox.evidenceOverrides = overrides;
+  execution.ledger.push({ at: now(), event: 'demo_success_branch_completed', details: { simulationLabel: SIMULATION_LABEL, paymentStatus: 'not_applicable_simulation', evidenceOverrides: overrides } });
   return execution;
 }
 
@@ -316,15 +356,37 @@ export function evaluateDemoDeliverable(execution, packageId) {
   return execution;
 }
 
-export function reviewDemoDeliverable(execution, packageId, decision) {
+/**
+ * Record a human decision. Acceptance is gated on the evidence checks: if either
+ * evidence layer is not `complete`, acceptance is refused unless the caller supplies
+ * `options.evidenceOverride = { reason, reviewer }`. The override is bound to the
+ * exact packet digest and is stored on the acceptance record and in the ledger.
+ */
+export function reviewDemoDeliverable(execution, packageId, decision, options = {}) {
   if (execution?.mode !== 'simulation_only') throw new Error('Simulation execution not found.');
   const pkg = execution.packages.find((item) => item.packageId === packageId);
   if (!pkg) throw new Error('Unknown work package.');
   if (pkg.status !== 'awaiting_human_review') throw new Error('Run the structural evaluation successfully before human review.');
   if (!['accept', 'request_revision'].includes(decision)) throw new Error('Decision must be accept or request_revision.');
-  pkg.acceptance = { status: decision === 'accept' ? 'accepted' : 'revision_requested', acceptedAt: decision === 'accept' ? now() : null };
-  pkg.status = decision === 'accept' ? 'accepted' : 'review_required';
-  execution.ledger.push({ at: now(), event: decision === 'accept' ? 'demo_deliverable_accepted' : 'demo_revision_requested', details: { packageId } });
+  if (decision === 'request_revision') {
+    pkg.acceptance = { status: 'revision_requested', acceptedAt: null };
+    pkg.status = 'review_required';
+    execution.ledger.push({ at: now(), event: 'demo_revision_requested', details: { packageId } });
+    refreshDemoExecutionStatus(execution);
+    return execution;
+  }
+
+  const gate = assessEvidenceGate(pkg);
+  const acceptedAt = now();
+  let evidenceGate = { status: 'passed', verificationStatus: gate.verificationStatus, qualityStatus: gate.qualityStatus, packetDigest: gate.packetDigest, override: null };
+  if (!gate.passed) {
+    const override = normalizeEvidenceOverride(options?.evidenceOverride, gate);
+    evidenceGate = { ...evidenceGate, status: 'overridden', override: { ...override, overriddenAt: acceptedAt, packetDigest: gate.packetDigest } };
+    execution.ledger.push({ at: acceptedAt, event: 'demo_evidence_gate_overridden', details: { packageId, verificationStatus: gate.verificationStatus, qualityStatus: gate.qualityStatus, packetDigest: gate.packetDigest, reviewer: override.reviewer, reason: override.reason } });
+  }
+  pkg.acceptance = { status: 'accepted', acceptedAt, evidenceGate };
+  pkg.status = 'accepted';
+  execution.ledger.push({ at: acceptedAt, event: 'demo_deliverable_accepted', details: { packageId, evidenceGate: evidenceGate.status, verificationStatus: gate.verificationStatus, qualityStatus: gate.qualityStatus } });
   refreshDemoExecutionStatus(execution);
   return execution;
 }
@@ -338,6 +400,7 @@ export function buildDemoFinalReport(execution) {
     title: 'WorkRelay simulated project report',
     disclosure: execution.warning,
     completedPackages: accepted.length,
+    evidenceOverrides: accepted.filter((pkg) => pkg.acceptance?.evidenceGate?.status === 'overridden').length,
     totalPackages: execution.packages.length,
     sections: execution.packages.map((pkg) => ({
       title: pkg.title,
@@ -347,6 +410,8 @@ export function buildDemoFinalReport(execution) {
       contentHash: pkg.contentHash,
       evidencePacket: clone(pkg.evidencePacket),
       evaluation: pkg.evaluation,
+      evidenceGate: assessEvidenceGate(pkg),
+      acceptance: clone(pkg.acceptance),
       dependencyInputs: clone(pkg.dependencyInputs ?? []),
       dependencyHandoff: clone(pkg.dependencyHandoff ?? null)
     })),

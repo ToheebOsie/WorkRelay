@@ -535,7 +535,13 @@ const server = createServer(async (req, res) => {
       if (!principal) return json(res, 401, { error: 'Browser identity is missing or expired. Reload the application.' });
       if (session.ownerPrincipalId !== principal.principalId) return json(res, 403, { error: 'This project belongs to a different principal.' });
       if (session.mode !== 'demo') return json(res, 409, { error: 'Human review simulation is disabled for live projects.' });
-      reviewDemoDeliverable(session.execution, String(input.packageId || ''), String(input.decision || ''));
+      // The reviewer is the browser principal. Identity is declared, not authenticated.
+      const evidenceOverride = typeof input.evidenceOverrideReason === 'string'
+        ? { reason: input.evidenceOverrideReason, reviewer: { kind: 'browser_principal', id: principal.principalId } }
+        : undefined;
+      try {
+        reviewDemoDeliverable(session.execution, String(input.packageId || ''), String(input.decision || ''), { evidenceOverride });
+      } catch (error) { return json(res, 409, { error: error.message }); }
       sessions.set(session.id, session);
       return json(res, 200, { execution: session.execution, report: buildDemoFinalReport(session.execution), workflow: buildProjectOverview(session, { commissioningConfigured: Boolean(commissioner) }), simulationOnly: true });
     }

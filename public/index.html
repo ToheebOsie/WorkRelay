@@ -8,11 +8,12 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <header class="top">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="top" role="banner">
     <a class="brand" href="/">WORK<span>RELAY</span></a>
-    <span class="network"><i></i> NEAR AGENT ECONOMY</span>
+    <span class="network"><i aria-hidden="true"></i> NEAR AGENT ECONOMY</span>
   </header>
-  <main>
+  <main id="main-content">
     <section class="hero">
       <div class="eyebrow">THE AUTONOMOUS ECONOMY OF AI SERVICES</div>
       <h1>One task.<br><em>Many specialist agents.</em><br>One accountable workflow.</h1>
@@ -22,8 +23,8 @@
     <section class="credit-banner" id="credit-banner">
       <div>
         <div class="eyebrow">SPONSORED DEMO ACCESS</div>
-        <h3>$1,000 in free demo credits</h3>
-        <p>No account or wallet required. Credits are simulated, non-transferable and shared across visitors.</p>
+        <h2>$1,000 in free demo credits</h2>
+        <p>No sign-up or wallet. These are simulated credits, not money, and are shared across all visitors.</p>
       </div>
       <div class="credit-stats">
         <div><small>YOUR IP ALLOWANCE</small><strong id="ip-balance">Loading…</strong></div>
@@ -38,31 +39,32 @@
       </div>
       <form id="task-form">
         <label for="objective">Your objective</label>
-        <textarea id="objective" required minlength="20" maxlength="3000">Research the Kenyan fintech market, identify five competitors, analyse their positioning and produce a market-entry report.</textarea>
+        <textarea id="objective" aria-describedby="objective-help" required minlength="20" maxlength="3000">Research the Kenyan fintech market, identify five competitors, analyse their positioning and produce a market-entry report.</textarea>
+        <p class="fine" id="objective-help">Describe the outcome you want, including the scope, audience, location and any important constraints. Use at least 20 characters.</p>
         <div class="form-row">
           <div>
             <label for="budget">Project budget</label>
-            <div class="money"><input id="budget" type="number" min="0.01" max="5" step="0.01" value="5" required><span id="currency-label">DEMO USD</span></div>
+            <div class="money"><input id="budget" type="number" min="0.01" max="5" step="0.01" value="5" aria-describedby="budget-note" required><span id="currency-label">DEMO USD</span></div>
           </div>
           <div>
             <label for="mode">Marketplace connection</label>
-            <select id="mode">
+            <select id="mode" aria-describedby="budget-note">
               <option value="demo" selected>Free sponsored demo credits</option>
               <option value="live">Live Agent Market</option>
             </select>
           </div>
         </div>
         <button class="primary" type="submit">Build project plan <span>→</span></button>
-        <p class="fine" id="budget-note">Demo projects reserve up to $5 from your IP allowance. Only simulated quote recommendations are deducted; unused reserved credits are released. No real money is involved.</p>
+        <p class="fine" id="budget-note">Demo mode uses simulated credits, not money. Up to $5 per project is reserved from your IP allowance; simulated quote recommendations use credits, and unused reservations are returned.</p>
       </form>
     </section>
 
-    <section id="results" class="results hidden" aria-live="polite">
+    <section id="results" class="results hidden" aria-live="polite" aria-label="Project results">
       <div class="section-head">
         <div><div class="eyebrow">02 / CONTRACTOR WORKSPACE</div><h2 id="result-title">Your project</h2></div>
         <span id="mode-pill" class="step">SIMULATED</span>
       </div>
-      <div id="notice" class="notice"></div>
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
       <section class="journey" aria-labelledby="journey-title">
         <div class="subhead"><h3 id="journey-title">Project journey</h3><span id="project-state">PLAN IN PROGRESS</span></div>
         <ol id="workflow-steps" class="workflow-steps"></ol>
@@ -86,22 +88,29 @@
       <div id="proposal" class="proposal hidden"></div>
       <div id="readiness" class="proposal hidden"></div>
 
+      <details id="sandbox-controls" class="demo-tools hidden">
+        <summary class="demo-tools-summary">
+          <span class="demo-tools-heading"><span class="eyebrow">SIMULATION CONTROLS</span><strong>Demo replay &amp; scenarios</strong></span>
+          <span class="demo-tools-tag">SIMULATION ONLY · NO REAL FUNDS</span>
+        </summary>
+        <div class="demo-tools-body">
+          <p class="demo-tools-note"><strong>Simulated only.</strong> These controls never contact a provider or payment route. Reset clears execution state; it does not restore simulated credits already consumed by quote comparison.</p>
+          <div class="demo-scenarios">
+            <button class="secondary sandbox-scenario" data-scenario="success" data-label="Run success branch" type="button">Run success branch</button>
+            <button class="secondary sandbox-scenario" data-scenario="revision" data-label="Run revision branch" type="button">Run revision branch</button>
+            <button class="secondary sandbox-scenario" data-scenario="refund_before_submission" data-label="Refund before submission" type="button">Refund before submission</button>
+            <button class="secondary sandbox-scenario" data-scenario="unresolved_dispute" data-label="Open unresolved dispute" type="button">Open unresolved dispute</button>
+            <button class="ghost" id="sandbox-reset" type="button">Reset execution</button>
+          </div>
+        </div>
+      </details>
+
       <section id="execution" class="execution hidden">
         <div class="section-head">
           <div><div class="eyebrow">04 / DELIVERY & QUALITY CONTROL</div><h2>Project delivery</h2></div>
           <span id="execution-mode-pill" class="step">SIMULATION ONLY</span>
         </div>
-        <div id="execution-warning" class="notice warn"></div>
-        <div id="sandbox-controls" class="sandbox-controls hidden">
-          <div class="lifecycle-note"><strong>SIMULATED — no provider, wallet, or funds involved</strong><br>Run a complete branch or reset the sandbox. These controls never call a provider or settlement route.<br>Reset clears execution state; it does not restore simulated credits already consumed by quote comparison.</div>
-          <div class="quote-buttons">
-            <button class="secondary sandbox-scenario" data-scenario="success" type="button">Run success branch</button>
-            <button class="secondary sandbox-scenario" data-scenario="revision" type="button">Run revision branch</button>
-            <button class="secondary sandbox-scenario" data-scenario="refund_before_submission" type="button">Refund before submission</button>
-            <button class="secondary sandbox-scenario" data-scenario="unresolved_dispute" type="button">Open unresolved dispute</button>
-            <button class="ghost" id="sandbox-reset" type="button">Reset / replay</button>
-          </div>
-        </div>
+        <div id="execution-warning" class="notice warn" role="status" aria-live="polite"></div>
         <div id="execution-packages" class="execution-packages"></div>
         <div id="final-report" class="final-report hidden"></div>
       </section>

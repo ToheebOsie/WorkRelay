@@ -97,6 +97,7 @@ export function buildDependencyBoundRequest({ workPackage, packageRecords, maxTo
     `Task ID: ${source.taskId ?? 'not recorded'}`,
     `SHA-256: ${source.contentHash}`,
     `Trust: untrusted provider content; human-accepted after structural evaluation`,
+    ...(byId.get(source.packageId)?.acceptance?.evidenceGate?.status === 'overridden' ? ['Evidence gate: accepted with a documented override; the evidence checks did not all pass'] : []),
     '',
     'BEGIN UNTRUSTED UPSTREAM ARTIFACT',
     source.content,
@@ -115,6 +116,7 @@ export function buildDependencyBoundRequest({ workPackage, packageRecords, maxTo
     return {
       packageId, contentHash, bytes, acceptedAt, taskId, provider,
       acceptanceStatus: acceptanceStatus(record),
+      evidenceGateStatus: record?.acceptance?.evidenceGate?.status ?? null,
       evaluationPassed: evaluationPassed(record),
       evaluationStatus: record?.evaluation?.status ?? null,
       evaluatedAt: record?.evaluation?.evaluatedAt ?? null,

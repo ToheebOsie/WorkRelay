@@ -339,12 +339,26 @@ test('one project journey can plan, quote, simulate, review, report and resume a
       assert.equal(evaluate.status, 200, await evaluate.clone().text());
       const evaluated = await evaluate.json();
       assert.equal(evaluated.execution.packages.find((pkg) => pkg.packageId === packageId).evaluation.passed, true);
-      const review = await request(`${base}/api/review`, {
+      const blockedReview = await request(`${base}/api/review`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ sessionId: created.sessionId, packageId, decision: 'accept' })
       });
+      assert.equal(blockedReview.status, 409, 'acceptance must be refused while the evidence checks have not passed');
+      assert.match((await blockedReview.json()).error, /Evidence checks have not all passed/);
+      const shortReason = await request(`${base}/api/review`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: created.sessionId, packageId, decision: 'accept', evidenceOverrideReason: 'too short' })
+      });
+      assert.equal(shortReason.status, 409);
+      const review = await request(`${base}/api/review`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: created.sessionId, packageId, decision: 'accept', evidenceOverrideReason: 'Reviewed the deliberately failing demo source and accept the simulated output.' })
+      });
       assert.equal(review.status, 200, await review.clone().text());
       runData = await review.json();
+      const accepted = runData.execution.packages.find((pkg) => pkg.packageId === packageId);
+      assert.equal(accepted.acceptance.evidenceGate.status, 'overridden');
+      assert.equal(accepted.acceptance.evidenceGate.override.reviewer.kind, 'browser_principal');
     }
   };
   await reviewPackages(roots.map((item) => item.packageId));

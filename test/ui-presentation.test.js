@@ -92,3 +92,112 @@ test('execution UI exposes current-regulatory-status review results', async () =
   assert.match(source, /current-law status/);
   assert.match(source, /regulatoryCurrentStatus\?\.status/);
 });
+
+test('the review UI makes the evidence gate and any override visible and requires a written reason', () => {
+  assert.match(app, /data-evidence-gate/);
+  assert.match(app, /Accept with documented evidence override/);
+  assert.match(app, /evidenceOverrideReason/);
+  assert.match(app, /Accepted with an evidence override/);
+  assert.match(app, /Accepted with an evidence override: \$\{report\.evidenceOverrides/);
+});
+
+test('primary workflow includes accessible skip navigation, field guidance and live status announcements', () => {
+  assert.match(html, /class="skip-link" href="#main-content"/);
+  assert.match(html, /<main id="main-content">/);
+  assert.match(html, /aria-describedby="objective-help"/);
+  assert.match(html, /id="objective-help"/);
+  assert.match(html, /id="notice" class="notice" role="status" aria-live="polite"/);
+  assert.match(html, /id="execution-warning" class="notice warn" role="status" aria-live="polite"/);
+});
+
+test('global UI sizing, responsive layouts and reduced-motion preferences are defined', () => {
+  assert.match(css, /textarea, input, select\s*\{[^}]*font:\s*400 16px/);
+  assert.match(css, /@media\s*\(max-width:\s*560px\)/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(css, /button:focus-visible, a:focus-visible, summary:focus-visible/);
+});
+
+
+test('lifecycle notes remain readable inside light delivery cards', () => {
+  const note = rule('.execution-card .lifecycle-note');
+  const foreground = colorFrom(note, 'color');
+  assert.ok(contrast(foreground, '#ffffff') >= 4.5, 'lifecycle notes on white cards must meet WCAG AA contrast');
+  assert.match(note, /font-size:\s*14px/);
+});
+
+test('compact workflow labels and supporting quote details are not rendered as tiny text', () => {
+  const labels = css.match(/\.step,\s*\.metric-label,\s*\.credit-stats small,\s*\.subhead span,\s*\.package-index,\s*\.status,\s*\.workflow-number,\s*\.workflow-state\s*\{([^}]*)\}/s);
+  assert.ok(labels, 'the compact workflow labels should share an explicit readable-size rule');
+  assert.match(labels[1], /font-size:\s*12px/);
+  assert.match(rule('.quote-line small'), /font-size:\s*13px/);
+  assert.match(rule('.check-row small'), /font-size:\s*13px/);
+});
+
+test('long quote labels can wrap instead of forcing horizontal overflow', () => {
+  assert.match(css, /\.quote-line\s*>\s*span,\s*\.quote-package header\s*>\s*span\s*\{[^}]*overflow-wrap:\s*anywhere/);
+});
+
+
+test('evidence checks, source assessments, and claim assessments are collapsible native disclosures', () => {
+  assert.match(app, /function evidenceDisclosure\(/);
+  assert.match(app, /Verification checks/);
+  assert.match(app, /Source assessments/);
+  assert.match(app, /Claim assessments/);
+  assert.match(app, /<details class="evidence-item">/);
+  assert.match(app, /<summary><span class="evidence-item-title">/);
+  assert.match(css, /\.execution-card summary:focus-visible/);
+});
+
+test('demo scenario and replay controls live in a separate collapsible simulation toolbar', () => {
+  const toolbar = html.indexOf('<details id="sandbox-controls" class="demo-tools hidden">');
+  const delivery = html.indexOf('<section id="execution"');
+  assert.ok(toolbar >= 0 && delivery > toolbar, 'the demo toolbar should precede and sit outside the delivery section');
+  assert.match(html, /SIMULATION ONLY · NO REAL FUNDS/);
+  assert.match(html, /These controls never contact a provider or payment route/);
+  assert.match(app, /button\.onclick = \(\) => runSandboxScenario/);
+  assert.doesNotMatch(app, /sandboxControls\.querySelectorAll\('\.sandbox-scenario'\)\.forEach\(\(button\) => button\.addEventListener/);
+});
+
+test('elements marked hidden are actually removed from layout and keyboard navigation', () => {
+  assert.match(css, /\.hidden\s*\{\s*display:\s*none\s*!important\s*;/);
+});
+
+test('long execution and lifecycle deliverables wrap on narrow screens', () => {
+  assert.match(css, /\.execution-card pre,\s*\.lifecycle-deliverable\s*\{[^}]*white-space:\s*pre-wrap/);
+  assert.match(css, /\.execution-card pre,\s*\.lifecycle-deliverable\s*\{[^}]*overflow-wrap:\s*anywhere/);
+});
+
+test('programmatic section scrolling respects reduced-motion preferences', () => {
+  assert.match(app, /function scrollToSection\(/);
+  assert.match(app, /prefers-reduced-motion: reduce/);
+  assert.match(app, /element\.scrollIntoView\(\{ behavior: reduceMotion \? 'auto' : 'smooth'/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test('the hero is followed by correctly nested section headings', () => {
+  assert.match(html, /<h1>[\s\S]*?<\/h1>[\s\S]*?<section class="credit-banner"[\s\S]*?<h2>\$1,000 in free demo credits<\/h2>/);
+});
+
+test('demo scenario and reset requests are mutually exclusive until the active request settles', () => {
+  assert.equal((app.match(/if \(sandboxBusy\) return;/g) || []).length, 2);
+  assert.equal((app.match(/setSandboxControlsDisabled\(true\)/g) || []).length, 2);
+  assert.match(app, /finally\s*\{\s*sandboxBusy = false;\s*setSandboxControlsDisabled\(false\);/);
+});
+
+
+test('mobile network metadata remains readable at compact widths', () => {
+  assert.match(css, /@media\s*\(max-width:\s*560px\)\s*\{\s*\.network\s*\{\s*font-size:\s*11px/);
+});
+
+
+test('evidence and demo disclosure summaries provide at least 44px touch targets', () => {
+  for (const selector of ['.evidence-disclosure > summary', '.evidence-item > summary', '.demo-tools-summary']) {
+    assert.match(rule(selector), /min-height:\s*(?:4[4-9]|[5-9]\d|\d{3,})px/ , `${selector} should remain at least 44px tall`);
+  }
+});
+
+
+test('evidence packet and quality policy sections expose semantic headings', () => {
+  assert.match(app, /<h3 class="evidence-heading">Evidence packet:/);
+  assert.match(app, /<h3 class="evidence-heading">Evidence quality policy:/);
+});

@@ -1,14 +1,42 @@
 import { lookup } from 'node:dns/promises';
 import { createHash } from 'node:crypto';
+import { request as httpsRequest } from 'node:https';
+import { BlockList, isIP } from 'node:net';
 import { commitRecord, SCHEMA_VERSIONS, validateEvidenceManifest } from '../contracts/schema.js';
 import { evaluateEvidenceQuality } from './evidence-quality.js';
 
 const MAX_SOURCE_BYTES = 1_000_000;
 const MAX_REDIRECTS = 3;
+const DEFAULT_TIMEOUT_MS = 10_000;
+const MAX_TIMEOUT_MS = 30_000;
 const ALLOWED_CONTENT_TYPES = new Set(['text/plain', 'text/html', 'text/markdown', 'application/json']);
-const PRIVATE_IPV4 = /^(10\.|127\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[0-1])\.)/;
-const PRIVATE_IPV6 = /^(::1|fc|fd|fe8[0-9a-f]:)/i;
 const sha256 = (value) => createHash('sha256').update(value, 'utf8').digest('hex');
+
+// IPv4 ranges that are never valid public source destinations.
+const BLOCKED_IPV4 = new BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
+  ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.88.99.0', 24], ['192.168.0.0', 16],
+  ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4]
+]) BLOCKED_IPV4.addSubnet(network, prefix, 'ipv4');
+
+// IPv6 is allow-listed rather than block-listed: only global unicast (2000::/3)
+// is accepted, minus ranges inside it that are special-purpose. Everything else
+// (loopback, unspecified, link-local fe80::/10, unique-local fc00::/7, multicast,
+// IPv4-mapped, NAT64, ...) is rejected, so no private range can be missed.
+const GLOBAL_UNICAST_IPV6 = new BlockList();
+GLOBAL_UNICAST_IPV6.addSubnet('2000::', 3, 'ipv6');
+const SPECIAL_IPV6 = new BlockList();
+for (const [network, prefix] of [['2001::', 23], ['2001:db8::', 32], ['2002::', 16], ['3fff::', 20]]) SPECIAL_IPV6.addSubnet(network, prefix, 'ipv6');
+
+/** True only for a literal IP address that is safe to treat as a public destination. Unknown input fails closed. */
+export function isPublicAddress(address) {
+  const text = String(address ?? '');
+  const family = isIP(text);
+  if (family === 4) return !BLOCKED_IPV4.check(text, 'ipv4');
+  if (family === 6) return GLOBAL_UNICAST_IPV6.check(text, 'ipv6') && !SPECIAL_IPV6.check(text, 'ipv6');
+  return false;
+}
 
 function fail(message) { throw new TypeError(message); }
 function timestamp(value) { return value ?? new Date().toISOString(); }
@@ -22,14 +50,20 @@ function validateHttpUrl(raw, path = 'url') {
   return url;
 }
 
-async function assertPublicHostname(url, resolveHostname = lookup) {
-  const addresses = await resolveHostname(url.hostname, { all: true, verbatim: true });
-  const list = Array.isArray(addresses) ? addresses : [addresses];
-  if (!list.length) fail(`source ${url.hostname}: hostname did not resolve`);
-  for (const item of list) {
-    const address = String(item.address ?? item);
-    if (PRIVATE_IPV4.test(address) || PRIVATE_IPV6.test(address) || address === '0.0.0.0' || address === '::') fail(`source ${url.hostname}: private or local address is not allowed`);
-  }
+/**
+ * Resolve a hostname once and require every returned address to be public.
+ * The validated addresses are returned so the connection can be pinned to them.
+ */
+async function resolvePublicAddresses(url, resolveHostname = lookup) {
+  const hostname = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname;
+  const addresses = isIP(hostname) ? [{ address: hostname, family: isIP(hostname) }] : await resolveHostname(hostname, { all: true, verbatim: true });
+  const list = (Array.isArray(addresses) ? addresses : [addresses]).map((item) => {
+    const address = String(item?.address ?? item);
+    return { address, family: Number(item?.family) || isIP(address) };
+  });
+  if (!list.length) fail(`source ${hostname}: hostname did not resolve`);
+  for (const item of list) if (!isPublicAddress(item.address)) fail(`source ${hostname}: private or local address is not allowed`);
+  return list;
 }
 
 async function readBoundedBody(response, maxBytes) {
@@ -57,40 +91,103 @@ function header(response, name) {
   return headers[name] ?? headers[name.toLowerCase()] ?? null;
 }
 
-/** Fetch one source with scheme, DNS, redirect, content-type and byte limits. */
-export async function captureSource(rawUrl, { fetcher = fetch, resolveHostname = lookup, retrievedAt, maxBytes = MAX_SOURCE_BYTES } = {}) {
+function raceDeadline(promise, signal) {
+  if (signal.aborted) return Promise.reject(new TypeError('source capture timed out'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new TypeError('source capture timed out'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error) => { signal.removeEventListener('abort', onAbort); reject(error); }
+    );
+  });
+}
+
+/**
+ * Default fetcher. It connects only to the address that was already validated
+ * (`address`), so a second DNS answer cannot redirect the request to a private
+ * host (DNS rebinding). TLS still verifies the certificate for the original
+ * hostname through SNI. Redirects are never followed here.
+ */
+export function createPinnedHttpsFetcher({ request = httpsRequest } = {}) {
+  return (href, { address, family, signal, maxBytes = MAX_SOURCE_BYTES } = {}) => new Promise((resolve, reject) => {
+    if (!address || !isPublicAddress(address)) { reject(new TypeError('A validated public address is required to open a connection.')); return; }
+    const url = new URL(href);
+    const hostname = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname;
+    const pinnedLookup = (_host, options, callback) => {
+      const cb = typeof options === 'function' ? options : callback;
+      if (options && typeof options === 'object' && options.all) cb(null, [{ address, family: family || isIP(address) }]);
+      else cb(null, address, family || isIP(address));
+    };
+    const req = request({
+      protocol: 'https:', hostname, port: 443, path: `${url.pathname}${url.search}`, method: 'GET', agent: false, signal,
+      lookup: pinnedLookup,
+      servername: isIP(hostname) ? undefined : hostname,
+      headers: { accept: 'text/plain, text/markdown, text/html, application/json;q=0.9', 'accept-encoding': 'identity', 'user-agent': 'WorkRelay-source-capture/0.1' }
+    }, (res) => {
+      const chunks = [];
+      let total = 0;
+      res.on('data', (chunk) => {
+        total += chunk.length;
+        if (total > maxBytes) { req.destroy(); reject(new TypeError(`source response exceeds ${maxBytes} bytes`)); return; }
+        chunks.push(chunk);
+      });
+      res.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        resolve({ status: res.statusCode, headers: res.headers, text: async () => body });
+      });
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/**
+ * Fetch one source with scheme, DNS, redirect, content-type, byte and time limits.
+ * Every hop resolves the hostname once, requires public addresses, and connects
+ * to that validated address. The whole capture shares one hard deadline.
+ */
+export async function captureSource(rawUrl, { fetcher = createPinnedHttpsFetcher(), resolveHostname = lookup, retrievedAt, maxBytes = MAX_SOURCE_BYTES, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   if (!Number.isInteger(maxBytes) || maxBytes <= 0 || maxBytes > MAX_SOURCE_BYTES) fail('maxBytes must be a positive bounded integer');
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT_MS) fail(`timeoutMs must be a positive integer no greater than ${MAX_TIMEOUT_MS}`);
   let current = validateHttpUrl(rawUrl);
-  let redirects = 0;
-  let response;
-  while (true) {
-    await assertPublicHostname(current, resolveHostname);
-    response = await fetcher(current.href, { redirect: 'manual' });
-    if (![301, 302, 303, 307, 308].includes(response.status)) break;
-    if (++redirects > MAX_REDIRECTS) fail('source exceeded redirect limit');
-    const location = header(response, 'location');
-    if (!location) fail('source redirect is missing Location');
-    current = validateHttpUrl(new URL(location, current).href, 'redirect location');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let redirects = 0;
+    let response;
+    while (true) {
+      const [pinned] = await raceDeadline(resolvePublicAddresses(current, resolveHostname), controller.signal);
+      response = await raceDeadline(Promise.resolve(fetcher(current.href, { redirect: 'manual', signal: controller.signal, address: pinned.address, family: pinned.family, maxBytes })), controller.signal);
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      if (++redirects > MAX_REDIRECTS) fail('source exceeded redirect limit');
+      const location = header(response, 'location');
+      if (!location) fail('source redirect is missing Location');
+      current = validateHttpUrl(new URL(location, current).href, 'redirect location');
+    }
+    const contentType = String(header(response, 'content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
+    const body = await raceDeadline(readBoundedBody(response, maxBytes), controller.signal);
+    const status = Number(response.status);
+    return {
+      url: current.href,
+      publisher: current.hostname,
+      publishedAt: null,
+      retrievedAt: timestamp(retrievedAt),
+      accessStatus: status >= 200 && status < 300 ? 'ok' : `http_${status}`,
+      contentHash: sha256(body),
+      excerpt: body.slice(0, 500),
+      contentType,
+      content: body,
+      safe: ALLOWED_CONTENT_TYPES.has(contentType) && status >= 200 && status < 300,
+      warnings: [
+        ...(ALLOWED_CONTENT_TYPES.has(contentType) ? [] : ['unsupported_content_type']),
+        ...(status >= 200 && status < 300 ? [] : ['source_not_successful'])
+      ]
+    };
+  } finally {
+    clearTimeout(timer);
   }
-  const contentType = String(header(response, 'content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
-  const body = await readBoundedBody(response, maxBytes);
-  const status = Number(response.status);
-  return {
-    url: current.href,
-    publisher: current.hostname,
-    publishedAt: null,
-    retrievedAt: timestamp(retrievedAt),
-    accessStatus: status >= 200 && status < 300 ? 'ok' : `http_${status}`,
-    contentHash: sha256(body),
-    excerpt: body.slice(0, 500),
-    contentType,
-    content: body,
-    safe: ALLOWED_CONTENT_TYPES.has(contentType) && status >= 200 && status < 300,
-    warnings: [
-      ...(ALLOWED_CONTENT_TYPES.has(contentType) ? [] : ['unsupported_content_type']),
-      ...(status >= 200 && status < 300 ? [] : ['source_not_successful'])
-    ]
-  };
 }
 
 function sourceDomain(url) {
@@ -114,21 +211,28 @@ export function verifyEvidencePacket({ manifest, sourceSnapshots = {}, rawArtifa
     return { status: 'check_failed', checks, limitation: 'A failed schema check prevents interpretation of downstream checks.' };
   }
 
-  if (rawArtifact !== null && sha256(rawArtifact) !== normalized.rawArtifactHash) checks.push(result('hash_integrity', 'check_failed', 'Raw artifact hash does not match the manifest.'));
-  else checks.push(result('hash_integrity', 'complete', 'Raw artifact hash matches the committed manifest or was independently supplied.'));
+  if (rawArtifact === null || rawArtifact === undefined) checks.push(result('hash_integrity', 'incomplete', 'No raw artifact was supplied, so its hash could not be verified against the manifest.'));
+  else if (sha256(rawArtifact) !== normalized.rawArtifactHash) checks.push(result('hash_integrity', 'check_failed', 'Raw artifact hash does not match the manifest.'));
+  else checks.push(result('hash_integrity', 'complete', 'Raw artifact hash matches the committed manifest.'));
 
   const unsafeSources = normalized.sources.filter((source) => {
     try { validateHttpUrl(source.url); } catch { return true; }
     const snapshot = sourceSnapshots[source.id];
     return Boolean(snapshot && (!snapshot.safe || snapshot.contentHash !== source.contentHash));
   });
-  checks.push(unsafeSources.length ? result('safe_source_capture', 'check_failed', `${unsafeSources.length} source(s) failed URL, access, content-type or snapshot-integrity checks.`) : result('safe_source_capture', 'complete', 'Sources use allowed HTTPS URLs and match available safe snapshots.'));
+  const uncapturedSources = normalized.sources.filter((source) => !sourceSnapshots[source.id]);
+  if (unsafeSources.length) checks.push(result('safe_source_capture', 'check_failed', `${unsafeSources.length} source(s) failed URL, access, content-type or snapshot-integrity checks.`));
+  else if (uncapturedSources.length) checks.push(result('safe_source_capture', 'incomplete', `No captured snapshot was supplied for ${uncapturedSources.length} source(s): ${uncapturedSources.map((source) => source.id).join(', ')}. Nothing was verified for them.`));
+  else checks.push(result('safe_source_capture', 'complete', 'Every source uses an allowed HTTPS URL and matches a safe captured snapshot.'));
 
   const excerptMismatches = normalized.sources.filter((source) => {
     const snapshot = sourceSnapshots[source.id];
     return snapshot && source.excerpt && !String(snapshot.content ?? '').includes(source.excerpt);
   });
-  checks.push(excerptMismatches.length ? result('excerpt_matches_snapshot', 'check_failed', `${excerptMismatches.length} saved excerpt(s) do not occur in the corresponding source snapshot.`) : result('excerpt_matches_snapshot', 'complete', 'Saved excerpts match the supplied source snapshots or no snapshot was available.'));
+  const excerptsUnchecked = normalized.sources.filter((source) => !sourceSnapshots[source.id] && source.excerpt);
+  if (excerptMismatches.length) checks.push(result('excerpt_matches_snapshot', 'check_failed', `${excerptMismatches.length} saved excerpt(s) do not occur in the corresponding source snapshot.`));
+  else if (excerptsUnchecked.length) checks.push(result('excerpt_matches_snapshot', 'incomplete', `${excerptsUnchecked.length} saved excerpt(s) could not be compared because no snapshot was supplied.`));
+  else checks.push(result('excerpt_matches_snapshot', 'complete', 'Saved excerpts occur in the supplied source snapshots.'));
 
   if (freshnessWindow) {
     const cutoff = Date.parse(freshnessWindow.start);
