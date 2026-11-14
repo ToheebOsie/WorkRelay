@@ -29,7 +29,7 @@ The downstream request is a new request and must receive a fresh unpaid quote. I
 
 ## Important current blockers
 
-The Checkpoint 17 source audit found no atomic per-execution dispatch claim around the app-server's load/check/dispatch sequence. Concurrent requests could race even though individual JSON writes use atomic file replacement. Do not enable paid dispatch until this is replaced with a durable atomic claim and a concurrency regression test proves only one commissioner invocation can occur.
+A source audit found no atomic per-execution dispatch claim around the app-server's load/check/dispatch sequence. Concurrent requests could race even though individual JSON writes use atomic file replacement. Do not enable paid dispatch until this is replaced with a durable atomic claim and a concurrency regression test proves only one commissioner invocation can occur.
 
 The current build uses local JSON persistence and a single-process store. It is not safe for multi-instance concurrent operation. The paid Agent Market A2A protocol profile is also not reconciled with the network profile accepted by the app-server; see [x402 payment authorization](X402_PAYMENT_AUTHORIZATION.md).
 

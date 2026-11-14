@@ -1,8 +1,8 @@
-# Evidence quality policy — Step 7
+# Evidence quality policy
 
 ## Status and scope
 
-This document describes the first five implementation increments of WorkRelay Step 7. It adds a deterministic evidence-quality policy layer over the committed evidence manifest. It does not replace the existing structural evaluator, source-capture guard or human acceptance state. Evidence quality review and package acceptance remain separate decisions.
+This document describes WorkRelay's evidence-quality policy layer. It adds a deterministic evidence-quality policy layer over the committed evidence manifest. It does not replace the existing structural evaluator, source-capture guard or human acceptance state. Evidence quality review and package acceptance remain separate decisions.
 
 Implementation: `src/evidence/evidence-quality.js`
 Publisher registry record: `workrelay.publisher-authority-registry.v2`
@@ -68,7 +68,7 @@ The publisher claim-type allowlist and minimum authority tier are separate gates
 
 The registry's human-readable `scope` describes the publisher's remit. The evaluator does not pretend to semantically prove that every page or claim falls within that prose description. Instead, the reviewer must submit a `scopeAssessments` record for every material `claimId` and every source linked to that claim with relationship `supports` or `contradicts`. Each assessment contains `claimId`, `sourceId`, `inScope` and a non-empty rationale. Missing pairs or mismatched extra pairs keep the review pending; any explicit `inScope: false` blocks acceptance with `check_failed`. This is packet-bound human judgment, not automated scope interpretation.
 
-Increment 5 bumps the registry to `workrelay.publisher-authority-registry.v2` and review records to `workrelay.evidence-review.v2`. v1 records do not satisfy the active v2 contracts. Existing v1 registry records must be independently re-reviewed and re-issued as v2 with subject scopes and claim-type allowlists; v1 human reviews must be re-issued with source-by-source scope assessments. Legacy host maps remain unversioned and review-required.
+The registry record version is `workrelay.publisher-authority-registry.v2` and review records are `workrelay.evidence-review.v2`. v1 records do not satisfy the active v2 contracts. Existing v1 registry records must be independently re-reviewed and re-issued as v2 with subject scopes and claim-type allowlists; v1 human reviews must be re-issued with source-by-source scope assessments. Legacy host maps remain unversioned and review-required.
 
 ## 2. Freshness
 
@@ -88,7 +88,7 @@ A freshness pass means only that the dates fit the configured window. It does no
 
 ### 2.1 Cadence-specific profiles
 
-Increment 4 adds claim types for explicitly declared series cadence:
+The policy adds claim types for explicitly declared series cadence:
 
 | Claim type | Maximum publication age | Maximum retrieval age |
 |---|---:|---:|
@@ -140,7 +140,7 @@ A packet-bound `accept` review cannot clear a declared contradiction with a gene
 
 The evaluator rejects a review if its record digest is tampered with or if its packet digest does not match the manifest being evaluated. An accepted decision is only considered complete when every material claim has a `supported` finding, an independence assessment covering the complete set of supporting source IDs for that claim, and an in-scope assessment for every supporting or contradicting material claim/source pair. Any source declared out of scope blocks acceptance. This prevents a reviewer from attesting to a convenient subset while leaving an additional source, including a flagged similarity pair, unreviewed.
 
-The reviewer identity is a declared identity only. The current application does not yet provide durable reviewer-account authentication, signatures or a persistent evidence-review store. The anonymous/revocable application capability is not an enterprise identity system. Those controls are part of Step 8 operational hardening. Do not treat the review digest as proof of who made the declaration.
+The reviewer identity is a declared identity only. The current application does not yet provide durable reviewer-account authentication, signatures or a persistent evidence-review store. The anonymous/revocable application capability is not an enterprise identity system. Those controls are not implemented in this version. Do not treat the review digest as proof of who made the declaration.
 
 ## 6. Status semantics
 
@@ -153,15 +153,15 @@ The reviewer identity is a declared identity only. The current application does 
 
 The output deliberately has no numeric trust score. Automated checks and human declarations remain visible as different evidence types.
 
-## 7. Current limitations and next increments
+## 7. Current limitations
 
-The first five Step 7 increments provide the policy engine, scope-limited v2 publisher-registry commitment, research-backed but inactive Nigeria fintech publisher candidates, cadence-specific freshness windows, current-regulatory-status attestation, captured-text similarity signals, explicit attribution/common-origin signals, conflict-adjudication requirements, packet-bound v2 human review constructor with source-by-source scope assessments, claim-level assessments, demo execution-card display and adversarial regression tests. They do not yet provide:
+The current version provides the policy engine, scope-limited v2 publisher-registry commitment, cadence-specific freshness windows, current-regulatory-status attestation, captured-text similarity signals, explicit attribution/common-origin signals, conflict-adjudication requirements, packet-bound v2 human review constructor with source-by-source scope assessments, claim-level assessments, demo execution-card display and adversarial regression tests. They do not yet provide:
 
-1. a deployment-owner-reviewed, production-maintained authority registry; the Nigeria fintech candidate pack is inactive until each exact host, human-readable scope and permitted claim-type allowlist is reviewed and promoted;
+1. a deployment-owner-reviewed, production-maintained authority registry;
 2. persistent storage and authenticated reviewer accounts;
 3. an HTTP review-submission API and full reviewer UI;
 4. source snapshot archival/retention controls;
 5. a broader cross-domain ownership graph and semantic detection of unattributed paraphrased derivatives; the current explicit-attribution, affiliation notes and text-overlap detectors are bounded signals;
 6. independent factual adjudication or automated truth verification.
 
-Authenticated reviewer accounts and durable registry/review persistence require Step 8 identity and persistence design; do not add ad hoc in-memory review state to the production path. Until the registry and authenticated review path are deployed, material claims with missing policy evidence must remain review-required.
+Authenticated reviewer accounts and durable registry/review persistence would require a separate identity and persistence design; do not add ad hoc in-memory review state to the production path. Until the registry and authenticated review path are deployed, material claims with missing policy evidence must remain review-required.

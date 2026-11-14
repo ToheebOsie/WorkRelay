@@ -2,11 +2,7 @@ node_modules/
 .env
 .env.*
 !.env.example
-.keys/
 *.log
-artifacts/
-# Rust build output
-target/
 .DS_Store
 
 # Persistent demo-credit ledger and project sessions (contain hashed visitor identifiers and project state)

@@ -1,6 +1,0 @@
-[build]
-# Keep the default host target for integration tests. Contract builds explicitly
-# pass --target wasm32-unknown-unknown in scripts/build-near-contracts.sh.
-
-[alias]
-near-test = "test -p workrelay-near-integration -- --test-threads=1"

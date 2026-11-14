@@ -42,7 +42,7 @@ When dependency-aware procurement is enabled, only root packages are quoted firs
 
 ## Recipient review limitation
 
-The procurement code detects a repeated `payTo` value across provider handles and can quarantine affected recommendations. The Checkpoint 17 audit found that the separate human recipient-review evaluator is not wired into the application and that a unique, unverified recipient is not necessarily quarantined by the duplicate-detection rule. A proposal status is therefore not independent proof of recipient identity or routing safety. Do not enable paid dispatch while the current review gap and exact historical recipient remain unresolved.
+The procurement code detects a repeated `payTo` value across provider handles and can quarantine affected recommendations. A source audit found that the separate human recipient-review evaluator is not wired into the application and that a unique, unverified recipient is not necessarily quarantined by the duplicate-detection rule. A proposal status is therefore not independent proof of recipient identity or routing safety. Do not enable paid dispatch while the current review gap and exact historical recipient remain unresolved.
 
 The marketplace's published worker flow explains that A2A callers pay a marketplace treasury and that the marketplace distributes the agent owner's share on delivery. That makes a shared treasury plausible, but it does not independently identify the historical WorkRelay address. See [x402 payment authorization](X402_PAYMENT_AUTHORIZATION.md).
 

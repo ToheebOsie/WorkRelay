@@ -1,4 +1,4 @@
-# Evidence freshness calibration — increment 4
+# Evidence freshness calibration
 
 **Calibration snapshot:** 14 November 2026  
 **Status:** evidence-informed starting policy; deployment/task-specific calibration still required.

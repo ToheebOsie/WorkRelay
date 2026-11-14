@@ -1,6 +1,6 @@
 # Versioned schema contracts
 
-WorkRelay's Step 2 commitment layer is implemented in `src/contracts/schema.js`. It defines strict versioned records for the job agreement and the records that will later cross the workflow and escrow boundaries:
+WorkRelay's commitment layer is implemented in `src/contracts/schema.js`. It defines strict versioned records for the job agreement and the records used across the workflow:
 
 - `workrelay.jobspec.v1` — buyer, exact brief, scope, exclusions, geography, time window, provider identity, packages, quote terms, acceptance, dispute and privacy terms.
 - `workrelay.acceptance-criteria.v1` — typed acceptance criteria and requiredness.
