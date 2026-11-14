@@ -2,7 +2,7 @@
 
 **An evidence-backed research procurement workflow.** A buyer describes one research decision. WorkRelay splits it into work packages, compares provider quotes, passes accepted upstream results to dependent packages with a fresh quote and a separate approval, and shows claim-by-claim evidence that a human reviewer can inspect before accepting anything.
 
-**Live demo:** _add the deployed URL here_
+Live demo: https://workrelay-production.up.railway.app/
 
 > The demo is a **simulation**. No wallet, account, provider or real money is involved. Every simulated item carries the label `SIMULATED — no provider, wallet, or funds involved`.
 
